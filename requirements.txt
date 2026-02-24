@@ -1,0 +1,12 @@
+numpy
+control
+matplotlib
+PyOpenGL
+PyQt6
+pyqtgraph
+sympy
+ipython
+ipykernel
+dill
+pytest
+scipy
