@@ -1,0 +1,72 @@
+I just added this note and committed it to a separate branch:
+
+From Chat GPT:
+
+1️⃣ Each of You Clones the Repo Locally
+On your own machines:
+git clone https://github.com/yourname/projectname.git
+cd projectname
+Never work directly on GitHub.com. Always work locally.
+🧠 How You Should Actually Work Together
+Here is the clean workflow:
+________________________________________
+🌿 Always Use Branches
+Instead of both editing main:
+git checkout -b data-cleaning
+Work. Then:
+git add .
+git commit -m "Clean USDA JSON parsing"
+git push origin data-cleaning
+Then open a Pull Request on GitHub.
+This prevents overwriting each other.
+________________________________________
+📁 Suggested Project Structure
+This will help massively:
+project/
+│
+├── data/
+│   ├── raw/
+│   └── processed/
+│
+├── src/
+│   ├── data_loader.py
+│   ├── optimizer.py
+│   ├── satiety_model.py
+│   └── utils.py
+│
+├── notebooks/
+│
+├── requirements.txt
+├── README.md
+└── .gitignore
+This structure looks very professional.
+🧠 Important Collaboration Rules
+Agree on:
+1.	Code style (PEP8)
+2.	Who owns which modules
+3.	File naming conventions
+4.	Branch naming convention
+Example:
+•	feature/satiety-model
+•	feature/gl-constraint
+•	data/usda-parser
+________________________________________
+🚨 Common Beginner Mistakes
+❌ Both editing main branch
+❌ Uploading entire venv
+❌ Not pulling before starting work
+❌ Working without committing frequently
+________________________________________
+🔁 Daily Workflow Example
+Before working:
+
+git pull origin main
+
+
+After working:
+
+git add .
+git commit -m "Implement glycemic load constraint"
+git push
+
+I changed something blah blah blah
