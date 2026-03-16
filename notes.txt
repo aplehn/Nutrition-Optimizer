@@ -1,0 +1,4 @@
+Flex Features: (may be added after the course)
+- "I don't want that food, choose something else" feature
+- Food preference score for each item: as foods are recommended, users can rate foods 
+from 1 to 10 based on their personal preferences

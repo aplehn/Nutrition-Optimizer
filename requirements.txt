@@ -10,3 +10,4 @@ ipykernel
 dill
 pytest
 scipy
+jax
