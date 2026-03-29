@@ -1,6 +1,10 @@
 # Import USDA Food Data
 import json
 import pandas as pd
+from scipy.optimize import linprog
+import numpy as np
+from scipy.optimize import milp, Bounds, LinearConstraint
+import constraints as cons
 
 with open('FoodData_Central_foundation_food_json_2025-12-18.json') as json_file:
     usda_food_data = json.load(json_file)
@@ -72,16 +76,110 @@ for food in usda_food_data['FoundationFoods']:
 
     rows.append(entry)
 
-# 3. Create DataFrame
-df = pd.DataFrame(rows)
+# # 3. Create DataFrame
+# df = pd.DataFrame(rows)
 
-# 4. Sort by Name (Alphabetical) then by Type
-df = df.sort_values(by=['Name', 'Type'])
+# # 4. Sort by Name (Alphabetical) then by Type
+# df = df.sort_values(by=['Name', 'Type'])
 
-# 5. Save to CSV
-df.to_csv('FoodData_Sorted_Filtered.csv', index=False)
-print("File saved as FoodData_Sorted_Filtered.csv")
+# # 5. Save to CSV
+# df.to_csv('FoodData_Sorted_Filtered.csv', index=False)
+# print("File saved as FoodData_Sorted_Filtered.csv")
 
+
+
+# Maps cons.nutrient_ranges keys -> CSV Column Names
+name_map = {
+    'Energy': 'Calories (kcal)',
+    'Protein': 'Protein (g)',
+    'Fat': 'Total Fat (g)',
+    'Carbs': 'Carbs (g)',
+    'Fiber': 'Fiber (g)',
+    'B1_Thiamine': 'Vitamin B-1 (mg)',
+    'B2_Riboflavin': 'Vitamin B-2 (mg)',
+    'B3_Niacin': 'Vitamin B-3 (mg)',
+    'B5_Pantothenic_Acid': 'Vitamin B-5 (mg)',
+    'B6_Pyridoxine': 'Vitamin B-6 (mg)',
+    'B7_Biotin': 'Vitamin B-7 (mcg)',
+    'B12_Cobalamin': 'Vitamin B-12 (mcg)',
+    'Folate': 'Folate (mcg)',
+    'Vitamin_A': 'Vitamin A (mcg)',
+    'Vitamin_C': 'Vitamin C (mg)',
+    'Vitamin_D': 'Vitamin D (mcg)',
+    'Vitamin_E': 'Vitamin E (mg)',
+    'Vitamin_K': 'Vitamin K (mcg)',
+    'Calcium': 'Calcium (mg)',
+    'Copper': 'Copper (mg)',
+    'Iron': 'Iron (mg)',
+    'Magnesium': 'Magnesium (mg)',
+    'Manganese': 'Manganese (mg)',
+    'Phosphorus': 'Phosphorus (mg)',
+    'Potassium': 'Potassium (mg)',
+    'Selenium': 'Selenium (mcg)',
+    'Sodium': 'Sodium (mg)',
+    'Zinc': 'Zinc (mg)',
+    'Saturated_Fat': 'Saturated Fat (g)',
+    'Trans_Fat': 'Trans Fat (g)',
+    'Monounsaturated_Fat': 'Monounsaturated Fat (g)',
+    'Polyunsaturated_Fat': 'Polyunsaturated Fat (g)',
+    'Sugars': 'Sugars (g)',
+    'Cholesterol': 'Cholesterol (mg)',
+    'Starch': 'Starch (g)',
+    'Omega_3': 'Omega-3 EPA (g)',
+    'Omega_6': 'Omega-6 (g)'
+}
+
+# Only keep nutrients that are in both cons.nutrient_ranges and name_map
+valid_nutrients = [k for k in cons.nutrient_ranges.keys() if k in name_map]
+
+# Create a list of the corresponding column names in the CSV for the valid nutrients
+csv_cols = [name_map[n] for n in valid_nutrients]
+
+# Filter the DataFrame to only include these columns (plus Name and Type for reference)
+foods = pd.read_csv('FoodData_Sorted_Filtered.csv')
+foods = pd.DataFrame(rows)
+foods = foods.fillna(0)  # Fill missing nutrient values with 0
+
+def calculate_satiety(row):
+    # a=0.5, b=0.3, c=0.2 based on your logic
+    # Energy density = kcal / 100g
+    # will need to adjust grams based on serving size in the future, but for now we can just use kcal as a proxy for energy density
+    e_density = row['Calories (kcal)'] / 1
+    score = (0.5 * row['Protein (g)']) + (0.3 * row['Fiber (g)']) - (0.2 * e_density)
+    return -score # Negative because milp minimizes
+
+# Calculate the satiety score for each food and use it as the objective function (c)
+c = foods.apply(calculate_satiety, axis=1).values
+
+# 1. Define Integrality (1 means the variable MUST be an integer)
+# If you have 10 foods, you need a list of ten 1s.
+# This tells the optimizer that you can only eat whole servings of each food (no fractions).
+integrality = np.ones(len(foods))
+
+# 2. Set bounds (e.g., you can eat 0 to 5 servings of any food)
+bounds = Bounds(0, 10)
+
+# 3. Define Constraints (A_ub and b_ub from before)
+# SciPy MILP uses LinearConstraint objects
+cols = list(cons.nutrient_ranges.keys())
+A_ub = foods[[name_map[k] for k in valid_nutrients]].fillna(0).values.T
+lb = np.array([cons.nutrient_ranges[k][0] for k in valid_nutrients], dtype=float)
+ub = np.array([cons.nutrient_ranges[k][1] for k in valid_nutrients], dtype=float)
+constraints = LinearConstraint(A_ub, lb, ub)
+
+integrality = np.ones(len(foods))
+constraints = LinearConstraint(A_ub, lb, ub)
+
+# 4. Solve
+res = milp(c=c, constraints=constraints, integrality=integrality, bounds=bounds)
+
+if res.success:
+    print("Optimized Meal Plan:", res.x)
+    for i, servings in enumerate(res.x):
+        if servings > 0:
+            print(f"{foods['Name'][i]}: {servings:.2f} servings")
+else:
+    print("Optimization failed:", res.message)
 
 
 # description,fdcId,category,"Cryptoxanthin, beta (Âµg)",Lycopene (Âµg),"Tocopherol, delta (mg)","Tocotrienol, gamma (mg)",
