@@ -65,8 +65,22 @@ for food in usda_food_data['SurveyFoods']:
         'Type': food.get('foodCategory', {}).get('description', 'N/A'),
         'FDC ID': food.get('fdcId')
     }
-    
-    # Extract only the specific nutrients requested
+
+    # 2. Extract Portion Size (New Logic)
+    # Most USDA survey foods have a 'foodPortions' list. 
+    # We'll grab the gramWeight from the first portion listed.
+    # 1. Get the list of portions
+    portions = food.get('foodPortions', [])
+
+    # 2. Check if the list has at least one item
+    if portions and portions[0].get('gramWeight'):
+        # Get the weight from the first portion
+        entry['Portion size (g)'] = portions[0].get('gramWeight')
+    else:
+        # If the list is empty OR gramWeight is missing/None/0
+        entry['Portion size (g)'] = 100
+
+    # 3. Extract Nutrients (Your existing logic)
     nutrients = food.get('foodNutrients', [])
     for n in nutrients:
         n_name = n['nutrient']['name']
@@ -75,16 +89,17 @@ for food in usda_food_data['SurveyFoods']:
             entry[column_name] = n.get('amount')
 
     rows.append(entry)
+    
 
-# # 3. Create DataFrame
-# df = pd.DataFrame(rows)
+# 3. Create DataFrame
+df = pd.DataFrame(rows)
 
-# # 4. Sort by Name (Alphabetical) then by Type
-# df = df.sort_values(by=['Name', 'Type'])
+# 4. Sort by Name (Alphabetical) then by Type
+df = df.sort_values(by=['Name', 'Type'])
 
-# # 5. Save to CSV
-# df.to_csv('FoodData_Sorted_Filtered.csv', index=False)
-# print("File saved as FoodData_Sorted_Filtered.csv")
+# 5. Save to CSV
+df.to_csv('FoodData_Sorted_Filtered.csv', index=False)
+print("File saved as FoodData_Sorted_Filtered.csv")
 
 
 
@@ -140,11 +155,23 @@ foods = pd.read_csv('FoodData_Sorted_Filtered.csv')
 foods = pd.DataFrame(rows)
 foods = foods.fillna(0)  # Fill missing nutrient values with 0
 
+exclude_categories = [
+    'Soft drinks', 
+    'Coffee', 
+    'Tea', 
+    'Alcoholic beverages', 
+    'Water',
+    'Energy drink'
+]
+pattern = '|'.join(exclude_categories)
+foods = foods[~foods['Type'].str.contains(pattern, case=False, na=False)]
+foods = foods[~foods['Name'].str.contains('coffee|tea|soda|diet|energy drink|water', case=False, na=False)]
 def calculate_satiety(row):
     # a=0.5, b=0.3, c=0.2 based on your logic
     # Energy density = kcal / 100g
+
     # will need to adjust grams based on serving size in the future, but for now we can just use kcal as a proxy for energy density
-    e_density = row['Calories (kcal)'] / 1
+    e_density = row['Calories (kcal)'] / (row['Portion size (g)'] if row['Portion size (g)'] > 0 else 100) # Avoid division by zero
     score = (0.5 * row['Protein (g)']) + (0.3 * row['Fiber (g)']) - (0.2 * e_density)
     return -score # Negative because milp minimizes
 
