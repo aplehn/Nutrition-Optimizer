@@ -5,9 +5,12 @@ nutrient_ranges = {
     # 'B1_Thiamine': (1.1, 1.2), # mg
     # 'B2_Riboflavin': (1.1, 1.3), # mg
     # 'B3_Niacin': (14, 16), # mg
-    'B5_Pantothenic_Acid': (5, 6), # mg
     'B6_Pyridoxine': (1.3, 1.7), # mg
-    'B7_Biotin': (30, 100), # mcg
+
+# current data is missing these two
+    # 'B5_Pantothenic_Acid': (5, 6), # mg
+    # 'B7_Biotin': (30, 100), # mcg
+
     'B12_Cobalamin': (2.4, 2.8), # mcg
     'Folate': (400, 600), # mcg
     'Vitamin_A': (700, 900), # mcg
@@ -27,7 +30,10 @@ nutrient_ranges = {
     # 'Zinc': (11, 15), # mg
     'Carbs': (225, 325), # g
     'Fiber': (25, 38), # g
-    'Starch': (0, 300), # g
+
+# current data is missing this one
+    # 'Starch': (0, 300), # g
+
     'Sugars': (0, 50), # g
     'Added_Sugars': (0, 25), # g
     'Net_Carbs': (0, 300), # g
@@ -36,7 +42,10 @@ nutrient_ranges = {
     "Monounsaturated_Fat": (0, 20), # g
     "Polyunsaturated_Fat": (0, 20), # g
     "Saturated_Fat": (0, 20), # g
-    "Trans_Fat": (0, 2), # g
+
+# current data is missing this one
+    # "Trans_Fat": (0, 2), # g
+
     "Omega_3": (0, 3), # g
     "Omega_6": (0, 20), # g
     'Cystine': (0, 5), # g
