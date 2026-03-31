@@ -91,15 +91,15 @@ for food in usda_food_data['SurveyFoods']:
     rows.append(entry)
     
 
-# 3. Create DataFrame
-df = pd.DataFrame(rows)
+# # 3. Create DataFrame
+# df = pd.DataFrame(rows)
 
-# 4. Sort by Name (Alphabetical) then by Type
-df = df.sort_values(by=['Name', 'Type'])
+# # 4. Sort by Name (Alphabetical) then by Type
+# df = df.sort_values(by=['Name', 'Type'])
 
-# 5. Save to CSV
-df.to_csv('FoodData_Sorted_Filtered.csv', index=False)
-print("File saved as FoodData_Sorted_Filtered.csv")
+# # 5. Save to CSV
+# df.to_csv('FoodData_Sorted_Filtered.csv', index=False)
+# print("File saved as FoodData_Sorted_Filtered.csv")
 
 
 
@@ -155,17 +155,11 @@ foods = pd.read_csv('FoodData_Sorted_Filtered.csv')
 foods = pd.DataFrame(rows)
 foods = foods.fillna(0)  # Fill missing nutrient values with 0
 
-exclude_categories = [
-    'Soft drinks', 
-    'Coffee', 
-    'Tea', 
-    'Alcoholic beverages', 
-    'Water',
-    'Energy drink'
-]
-pattern = '|'.join(exclude_categories)
-foods = foods[~foods['Type'].str.contains(pattern, case=False, na=False)]
-foods = foods[~foods['Name'].str.contains('coffee|tea|soda|diet|energy drink|water', case=False, na=False)]
+
+# Remove beverages (coffee, tea, soda, diet drinks, energy drinks, water) - these tend to have very low satiety scores and can skew the optimization
+foods = foods[~foods['Name'].str.contains('coffee|tea|soda|diet|energy drink|water|soft drink', case=False, na=False)] 
+
+
 def calculate_satiety(row):
     # a=0.5, b=0.3, c=0.2 based on your logic
     # Energy density = kcal / 100g
@@ -199,35 +193,75 @@ integrality = np.ones(len(foods))
 constraints = LinearConstraint(A_ub, lb, ub)
 
 # 4. Solve
-res = milp(c=c, constraints=constraints, integrality=integrality, bounds=bounds)
+# res = milp(c=c, constraints=constraints, bounds=bounds)
 
-if res.success:
-    # print("Optimized Meal Plan:", res.x)
-    # for i, servings in enumerate(res.x):
-    #     if servings > 0:
-    #         print(f"{foods['Name'][i]}: {servings:.2f} servings")
-    print("\n--- Optimized Meal Plan ---")
-    # Identify which foods were selected (servings > 0)
-    selected_indices = np.where(res.x > 0.01)[0] # Using 0.01 to avoid floating point noise
+# if res.success:
+#     # print("Optimized Meal Plan:", res.x)
+#     # for i, servings in enumerate(res.x):
+#     #     if servings > 0:
+#     #         print(f"{foods['Name'][i]}: {servings:.2f} servings")
+#     print("\n--- Optimized Meal Plan ---")
+#     # Identify which foods were selected (servings > 0)
+#     selected_indices = np.where(res.x > 0.01)[0] # Using 0.01 to avoid floating point noise
     
-    for i in selected_indices:
-        print(f"{foods['Name'].iloc[i]}: {res.x[i]:.2f} servings")
+#     for i in selected_indices:
+#         print(f"{foods['Name'].iloc[i]}: {res.x[i]:.2f} servings")
 
-    print("\n--- Nutritional Totals ---")
-    # Matrix multiplication: Servings (1 x Foods) @ Nutrient Data (Foods x Nutrients)
-    # result_totals will be an array of totals for each nutrient in 'valid_nutrients'
-    nutrient_values = foods[[name_map[k] for k in valid_nutrients]].values
-    totals = res.x @ nutrient_values
+#     print("\n--- Nutritional Totals ---")
+#     # Matrix multiplication: Servings (1 x Foods) @ Nutrient Data (Foods x Nutrients)
+#     # result_totals will be an array of totals for each nutrient in 'valid_nutrients'
+#     nutrient_values = foods[[name_map[k] for k in valid_nutrients]].values # Extract the nutrient values for the valid nutrients
+#     totals = res.x @ nutrient_values # This gives us the total amount of each nutrient in the optimized meal plan
 
-    for idx, nutrient_key in enumerate(valid_nutrients):
-        current_total = totals[idx]
-        lower_bound = cons.nutrient_ranges[nutrient_key][0]
-        upper_bound = cons.nutrient_ranges[nutrient_key][1]
+#     for idx, nutrient_key in enumerate(valid_nutrients): # Loop through the valid nutrients
+#         current_total = totals[idx] # Total amount of this nutrient in the optimized meal plan
+#         lower_bound = cons.nutrient_ranges[nutrient_key][0] # Minimum required amount for this nutrient
+#         upper_bound = cons.nutrient_ranges[nutrient_key][1] # Maximum allowed amount for this nutrient
         
-        # Print the nutrient name, the calculated total, and the target range
-        print(f"{name_map[nutrient_key]:<25}: {current_total:>8.2f} (Target: {lower_bound}-{upper_bound})")
-else:
-    print("Optimization failed:", res.message)
+#         # Print the nutrient name, the calculated total, and the target range
+#         print(f"{name_map[nutrient_key]:<25}: {current_total:>8.2f} (Target: {lower_bound}-{upper_bound})")
+# else:
+#     print("Optimization failed:", res.message)
+
+
+
+num_meals = 7
+
+print(f"Finding {num_meals} meal plans...\n")
+
+for i in range(num_meals):
+    # 1. Create a random "multiplier" for every food item
+    # This creates an array of numbers like [1.02, 0.98, 1.01...]
+    jitter = np.random.uniform(0.95, 1.05, size=len(c))
+    
+    # 2. Apply it to your original satiety scores (c)
+    jittered_c = c * jitter
+    
+    # 3. Solve the MILP with the slightly altered scores
+    res = milp(c=jittered_c, constraints=constraints, bounds=bounds)
+    
+    if res.success:
+        print(f"\n--- Meal Plan {i+1} ---")
+        # Identify which foods were selected (servings > 0)
+        selected_indices = np.where(res.x > 0.01)[0] # Using 0.01 to avoid floating point noise
+        for j in selected_indices:
+            print(f"{foods['Name'].iloc[j]}: {res.x[j]:.2f} servings") # Print the name of the food and how many servings
+        
+        print("\n--- Nutritional Totals ---")
+        nutrient_values = foods[[name_map[k] for k in valid_nutrients]].values # Extract the nutrient values for the valid nutrients
+        totals = res.x @ nutrient_values # This gives us the total amount of each nutrient in the optimized meal plan
+
+        for idx, nutrient_key in enumerate(valid_nutrients): # Loop through the valid nutrients
+            current_total = totals[idx] # Total amount of this nutrient in the optimized meal plan
+            lower_bound = cons.nutrient_ranges[nutrient_key][0] # Minimum required amount for this nutrient
+            upper_bound = cons.nutrient_ranges[nutrient_key][1] # Maximum allowed amount for this nutrient
+            
+            # Print the nutrient name, the calculated total, and the target range
+            print(f"{name_map[nutrient_key]:<25}: {current_total:>8.2f} (Target: {lower_bound}-{upper_bound})")
+    else:
+        print("Optimization failed:", res.message)
+
+
 
 
 # Name,Type,FDC ID,Protein (g),Total Fat (g),Carbs (g),Calories (kcal),Sugars (g),Fiber (g),Calcium (mg),Iron (mg),Magnesium (mg),
