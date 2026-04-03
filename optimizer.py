@@ -141,7 +141,8 @@ name_map = {
     'Cholesterol': 'Cholesterol (mg)',
     'Starch': 'Starch (g)',
     'Omega_3': 'Omega-3 EPA (g)',
-    'Omega_6': 'Omega-6 (g)'
+    'Omega_6': 'Omega-6 (g)',
+    
 }
 
 # Only keep nutrients that are in both cons.nutrient_ranges and name_map
@@ -222,6 +223,9 @@ constraints = LinearConstraint(A_ub, lb, ub)
 #         print(f"{name_map[nutrient_key]:<25}: {current_total:>8.2f} (Target: {lower_bound}-{upper_bound})")
 # else:
 #     print("Optimization failed:", res.message)
+
+# Use cvx pie
+
 
 
 

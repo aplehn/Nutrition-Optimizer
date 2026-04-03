@@ -48,6 +48,8 @@ nutrient_ranges = {
 
     "Omega_3": (0, 3), # g
     "Omega_6": (0, 20), # g
+
+# not in current data set
     'Cystine': (0, 5), # g
     'Histidine': (0, 5), # g
     'Isoleucine': (0, 5), # g
