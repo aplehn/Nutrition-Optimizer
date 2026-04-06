@@ -5,6 +5,7 @@ from scipy.optimize import linprog
 import numpy as np
 from scipy.optimize import milp, Bounds, LinearConstraint
 import constraints as cons
+from pulp import HiGHS, LpProblem, LpMaximize, LpVariable, lpSum, LpStatus, LpInteger, LpContinuous, LpBinary
 
 with open('Foods.json') as json_file:
     usda_food_data = json.load(json_file)
@@ -152,48 +153,118 @@ valid_nutrients = [k for k in cons.nutrient_ranges.keys() if k in name_map]
 csv_cols = [name_map[n] for n in valid_nutrients]
 
 # Filter the DataFrame to only include these columns (plus Name and Type for reference)
-foods = pd.read_csv('FoodData_Sorted_Filtered.csv')
-foods = pd.DataFrame(rows)
+foods = pd.read_csv('FoodData_with_Optimization_Types.csv')
+# foods = pd.DataFrame(rows)
 foods = foods.fillna(0)  # Fill missing nutrient values with 0
-
 
 # Remove beverages (coffee, tea, soda, diet drinks, energy drinks, water) - these tend to have very low satiety scores and can skew the optimization
 foods = foods[~foods['Name'].str.contains('coffee|tea|soda|diet|energy drink|water|soft drink', case=False, na=False)] 
 
+keywords_to_limit = ['Egg', 'Yogurt', 'Milk', 'Cheese', 'Fish', 'Chicken', 'Beef', 'Pork', 'Tofu', 'Tempeh', 'Lentil', 'Bean', 'Nut', 'Seed']
 
-def calculate_satiety(row):
-    # a=0.5, b=0.3, c=0.2 based on your logic
-    # Energy density = kcal / 100g
+# Intialize the Problem
+prob = LpProblem("Meal_Plan_Optimization", LpMaximize)
 
-    # will need to adjust grams based on serving size in the future, but for now we can just use kcal as a proxy for energy density
-    e_density = row['Calories (kcal)'] / (row['Portion size (g)'] if row['Portion size (g)'] > 0 else 100) # Avoid division by zero
-    score = (0.5 * row['Protein (g)']) + (0.3 * row['Fiber (g)']) - (0.2 * e_density)
-    return -score # Negative because milp minimizes
+# Create variables dynamically based on Optimization type column
+food_vars = {}
+bin_vars = {}
+for i, row in foods.iterrows():
+    # use the index or a unique ID for the variable name
+    var_name = f"food_{i}"
+    bin_name = f"bin_{i}"
 
-# Calculate the satiety score for each food and use it as the objective function (c)
-c = foods.apply(calculate_satiety, axis=1).values
-print("Objective function (satiety scores):", c)
+    # create binary switch
+    bin_vars[i] = LpVariable(bin_name, cat=LpBinary)
 
-# 1. Define Integrality (1 means the variable MUST be an integer)
-# If you have 10 foods, you need a list of ten 1s.
-# This tells the optimizer that you can only eat whole servings of each food (no fractions).
-integrality = np.ones(len(foods))
+    # if the optimization type is discrete, we want an integer variable (0, 1, 2, etc.) representing number of servings
+    if row['OptimizationType'] == 'Discrete':
+        # use integer variable for discrete optimization
+        food_vars[i] = LpVariable(var_name, lowBound=0, upBound= 5, cat=LpInteger)
 
-# 2. Set bounds (e.g., you can eat 0 to 5 servings of any food)
-bounds = Bounds(0, 10)
+    else:
+        # these can be continuous variables
+        food_vars[i] = LpVariable(var_name, lowBound=0, upBound=5,cat=LpContinuous)
+    
+    # Add constraint to link binary variable with food variable
+    prob += food_vars[i] <= 5 * bin_vars[i], f"Link_{i}_upper"
 
-# 3. Define Constraints (A_ub and b_ub from before)
-# SciPy MILP uses LinearConstraint objects
-cols = list(cons.nutrient_ranges.keys())
-A_ub = foods[[name_map[k] for k in valid_nutrients]].fillna(0).values.T
-lb = np.array([cons.nutrient_ranges[k][0] for k in valid_nutrients], dtype=float)
-ub = np.array([cons.nutrient_ranges[k][1] for k in valid_nutrients], dtype=float)
-constraints = LinearConstraint(A_ub, lb, ub)
 
-integrality = np.ones(len(foods))
-constraints = LinearConstraint(A_ub, lb, ub)
+for word in keywords_to_limit:
+    # find all rows that contain the word
+    group_indices = [i for i, row in foods.iterrows() if word.lower() in row['Name'].lower()]
 
-# 4. Solve
+    if group_indices:
+        # the sum of switches for all foods in this group must be <= 1
+        # this prevents the solver from picking multiple versions of eggs
+        prob += lpSum([bin_vars[i] for i in group_indices]) <= 1, f"Limit_{word}"
+
+
+# Calculate energy density and satiety score for each food
+foods['e_density'] = foods['Calories (kcal)'] / foods['Portion size (g)'].replace(0, 100)
+foods['satiety_score'] = (0.5 * foods['Protein (g)']) + (0.3 * foods['Fiber (g)']) - (0.2 * foods['e_density'])
+
+# define objective function 
+prob += lpSum([food_vars[i] * foods.loc[i, 'satiety_score'] for i in foods.index])
+
+for nutrient in valid_nutrients:
+    # Get the lower and upper bounds for this nutrient from the constraints
+    lower_bound, upper_bound = cons.nutrient_ranges[nutrient]
+    # sum of (amount of food * nutrient in that food)
+    nutrient_sum = lpSum([food_vars[i] * foods.loc[i, name_map[nutrient]] for i in foods.index])
+
+    # Add constraints for this nutrient
+    prob += nutrient_sum >= lower_bound, f"{nutrient}_min"
+    prob += nutrient_sum <= upper_bound, f"{nutrient}_max"
+
+# solve problem
+prob.solve(HiGHS(msg=False))
+
+# output the meal plan
+if LpStatus[prob.status] == 'Optimal':
+    print("\n--- Optimized Meal Plan ---")
+    for i in foods.index: # Loop through the food items
+        if food_vars[i].varValue and food_vars[i].varValue > 0:
+            if foods.loc[i, 'OptimizationType'] == 'Discrete': # Check if this food is discrete
+                print(f"{int(food_vars[i].varValue)} serving(s) of {foods.loc[i, 'Name']}") # Print the number of servings as an integer
+            else: # If it's continuous, print the amount in grams
+                print(f"{food_vars[i].varValue * foods.loc[i, 'Portion size (g)']}  grams  of {foods.loc[i, 'Name']}")
+else:
+    print(f"No optimal solution found. Solver status: {LpStatus[prob.status]}")
+
+
+# def calculate_satiety(row):
+#     # a=0.5, b=0.3, c=0.2 based on your logic
+#     # Energy density = kcal / 100g
+
+#     # will need to adjust grams based on serving size in the future, but for now we can just use kcal as a proxy for energy density
+#     e_density = row['Calories (kcal)'] / (row['Portion size (g)'] if row['Portion size (g)'] > 0 else 100) # Avoid division by zero
+#     score = (0.5 * row['Protein (g)']) + (0.3 * row['Fiber (g)']) - (0.2 * e_density)
+#     return -score # Negative because milp minimizes
+
+# # Calculate the satiety score for each food and use it as the objective function (c)
+# c = foods.apply(calculate_satiety, axis=1).values
+# print("Objective function (satiety scores):", c)
+
+# # 1. Define Integrality (1 means the variable MUST be an integer)
+# # If you have 10 foods, you need a list of ten 1s.
+# # This tells the optimizer that you can only eat whole servings of each food (no fractions).
+# integrality = np.ones(len(foods))
+
+# # 2. Set bounds (e.g., you can eat 0 to 5 servings of any food)
+# bounds = Bounds(0, 10)
+
+# # 3. Define Constraints (A_ub and b_ub from before)
+# # SciPy MILP uses LinearConstraint objects
+# cols = list(cons.nutrient_ranges.keys())
+# A_ub = foods[[name_map[k] for k in valid_nutrients]].fillna(0).values.T
+# lb = np.array([cons.nutrient_ranges[k][0] for k in valid_nutrients], dtype=float)
+# ub = np.array([cons.nutrient_ranges[k][1] for k in valid_nutrients], dtype=float)
+# constraints = LinearConstraint(A_ub, lb, ub)
+
+# integrality = np.ones(len(foods))
+# constraints = LinearConstraint(A_ub, lb, ub)
+
+# # 4. Solve
 # res = milp(c=c, constraints=constraints, bounds=bounds)
 
 # if res.success:
@@ -224,46 +295,44 @@ constraints = LinearConstraint(A_ub, lb, ub)
 # else:
 #     print("Optimization failed:", res.message)
 
-# Use cvx pie
 
 
 
+# num_meals = 7
 
-num_meals = 7
+# print(f"Finding {num_meals} meal plans...\n")
 
-print(f"Finding {num_meals} meal plans...\n")
-
-for i in range(num_meals):
-    # 1. Create a random "multiplier" for every food item
-    # This creates an array of numbers like [1.02, 0.98, 1.01...]
-    jitter = np.random.uniform(0.95, 1.05, size=len(c))
+# for i in range(num_meals):
+#     # 1. Create a random "multiplier" for every food item
+#     # This creates an array of numbers like [1.02, 0.98, 1.01...]
+#     jitter = np.random.uniform(0.95, 1.05, size=len(c))
     
-    # 2. Apply it to your original satiety scores (c)
-    jittered_c = c * jitter
+#     # 2. Apply it to your original satiety scores (c)
+#     jittered_c = c * jitter
     
-    # 3. Solve the MILP with the slightly altered scores
-    res = milp(c=jittered_c, constraints=constraints, bounds=bounds)
+#     # 3. Solve the MILP with the slightly altered scores
+#     res = milp(c=jittered_c, constraints=constraints, bounds=bounds)
     
-    if res.success:
-        print(f"\n--- Meal Plan {i+1} ---")
-        # Identify which foods were selected (servings > 0)
-        selected_indices = np.where(res.x > 0.01)[0] # Using 0.01 to avoid floating point noise
-        for j in selected_indices:
-            print(f"{foods['Name'].iloc[j]}: {res.x[j]:.2f} servings") # Print the name of the food and how many servings
+#     if res.success:
+#         print(f"\n--- Meal Plan {i+1} ---")
+#         # Identify which foods were selected (servings > 0)
+#         selected_indices = np.where(res.x > 0.01)[0] # Using 0.01 to avoid floating point noise
+#         for j in selected_indices:
+#             print(f"{foods['Name'].iloc[j]}: {res.x[j]:.2f} servings") # Print the name of the food and how many servings
         
-        print("\n--- Nutritional Totals ---")
-        nutrient_values = foods[[name_map[k] for k in valid_nutrients]].values # Extract the nutrient values for the valid nutrients
-        totals = res.x @ nutrient_values # This gives us the total amount of each nutrient in the optimized meal plan
+#         print("\n--- Nutritional Totals ---")
+#         nutrient_values = foods[[name_map[k] for k in valid_nutrients]].values # Extract the nutrient values for the valid nutrients
+#         totals = res.x @ nutrient_values # This gives us the total amount of each nutrient in the optimized meal plan
 
-        for idx, nutrient_key in enumerate(valid_nutrients): # Loop through the valid nutrients
-            current_total = totals[idx] # Total amount of this nutrient in the optimized meal plan
-            lower_bound = cons.nutrient_ranges[nutrient_key][0] # Minimum required amount for this nutrient
-            upper_bound = cons.nutrient_ranges[nutrient_key][1] # Maximum allowed amount for this nutrient
+#         for idx, nutrient_key in enumerate(valid_nutrients): # Loop through the valid nutrients
+#             current_total = totals[idx] # Total amount of this nutrient in the optimized meal plan
+#             lower_bound = cons.nutrient_ranges[nutrient_key][0] # Minimum required amount for this nutrient
+#             upper_bound = cons.nutrient_ranges[nutrient_key][1] # Maximum allowed amount for this nutrient
             
-            # Print the nutrient name, the calculated total, and the target range
-            print(f"{name_map[nutrient_key]:<25}: {current_total:>8.2f} (Target: {lower_bound}-{upper_bound})")
-    else:
-        print("Optimization failed:", res.message)
+#             # Print the nutrient name, the calculated total, and the target range
+#             print(f"{name_map[nutrient_key]:<25}: {current_total:>8.2f} (Target: {lower_bound}-{upper_bound})")
+#     else:
+#         print("Optimization failed:", res.message)
 
 
 
