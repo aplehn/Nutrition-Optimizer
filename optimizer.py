@@ -1,109 +1,7 @@
-# Import USDA Food Data
-import json
 import pandas as pd
-from scipy.optimize import linprog
-import numpy as np
-from scipy.optimize import milp, Bounds, LinearConstraint
 import constraints as cons
 from pulp import HiGHS, LpProblem, LpMaximize, LpVariable, lpSum, LpStatus, LpInteger, LpContinuous, LpBinary
-
-with open('Foods.json') as json_file:
-    usda_food_data = json.load(json_file)
-
-
-df = pd.json_normalize(usda_food_data['SurveyFoods'])
-
-df_sorted = df.sort_values(by='description')
-
-# Define the specific nutrients from your list that you want to extract and their corresponding column names in the USDA data
-target_nutrients = {
-    "Energy": "Calories (kcal)",
-    "Protein": "Protein (g)",
-    "Total lipid (fat)": "Total Fat (g)",
-    "Carbohydrate, by difference": "Carbs (g)",
-    "Cholesterol": "Cholesterol (mg)",
-    "Sugars, Total": "Sugars (g)",
-    "Total Sugars": "Sugars (g)",
-    "Vitamin A, RAE": "Vitamin A (mcg)",
-    "Vitamin C, total ascorbic acid": "Vitamin C (mg)",
-    "Vitamin D (D2 + D3)": "Vitamin D (mcg)",
-    "Vitamin E (alpha-tocopherol)": "Vitamin E (mg)",
-    "Vitamin K (phylloquinone)": "Vitamin K (mcg)",
-    "Folate, total": "Folate (mcg)",
-    "Potassium, K": "Potassium (mg)",
-    "Phosphorus, P": "Phosphorus (mg)",
-    "Magnesium, Mg": "Magnesium (mg)",
-    "Manganese, Mn": "Manganese (mg)",
-    "Calcium, Ca": "Calcium (mg)",
-    "Copper, Cu": "Copper (mg)",
-    "Zinc, Zn": "Zinc (mg)",
-    "Iron, Fe": "Iron (mg)",
-    "Sodium, Na": "Sodium (mg)",
-    "Selenium, Se": "Selenium (mcg)",
-    "Fiber, total dietary": "Fiber (g)",
-    "Fatty acids, total saturated": "Saturated Fat (g)",
-    "Fatty acids, total monounsaturated": "Monounsaturated Fat (g)",
-    "Fatty acids, total polyunsaturated": "Polyunsaturated Fat (g)",
-    "Fatty acids, total trans": "Trans Fat (g)",
-    "Thiamin": "Vitamin B-1 (mg)",
-    "Riboflavin": "Vitamin B-2 (mg)",
-    "Niacin": "Vitamin B-3 (mg)",
-    "Pantothenic acid": "Vitamin B-5 (mg)",
-    "Vitamin B-6": "Vitamin B-6 (mg)",
-    "Biotin": "Vitamin B-7 (mcg)",
-    "Vitamin B-12": "Vitamin B-12 (mcg)",
-    "Starch": "Starch (g)",
-    "PUFA 20:5 n-3 (EPA)": "Omega-3 EPA (g)",
-    "PUFA 18:2": "Omega-6 (g)"
-    
-}
-
-rows = []
-for food in usda_food_data['SurveyFoods']:
-    # Basic info
-    entry = {
-        'Name': food.get('description'),
-        'Type': food.get('foodCategory', {}).get('description', 'N/A'),
-        'FDC ID': food.get('fdcId')
-    }
-
-    # 2. Extract Portion Size (New Logic)
-    # Most USDA survey foods have a 'foodPortions' list. 
-    # We'll grab the gramWeight from the first portion listed.
-    # 1. Get the list of portions
-    portions = food.get('foodPortions', [])
-
-    # 2. Check if the list has at least one item
-    if portions and portions[0].get('gramWeight'):
-        # Get the weight from the first portion
-        entry['Portion size (g)'] = portions[0].get('gramWeight')
-    else:
-        # If the list is empty OR gramWeight is missing/None/0
-        entry['Portion size (g)'] = 100
-
-    # 3. Extract Nutrients (Your existing logic)
-    nutrients = food.get('foodNutrients', [])
-    for n in nutrients:
-        n_name = n['nutrient']['name']
-        if n_name in target_nutrients:
-            column_name = target_nutrients[n_name]
-            entry[column_name] = n.get('amount')
-
-    rows.append(entry)
-    
-
-# # 3. Create DataFrame
-# df = pd.DataFrame(rows)
-
-# # 4. Sort by Name (Alphabetical) then by Type
-# df = df.sort_values(by=['Name', 'Type'])
-
-# # 5. Save to CSV
-# df.to_csv('FoodData_Sorted_Filtered.csv', index=False)
-# print("File saved as FoodData_Sorted_Filtered.csv")
-
-
-
+import random
 # Maps cons.nutrient_ranges keys -> CSV Column Names
 name_map = {
     'Energy': 'Calories (kcal)',
@@ -149,85 +47,127 @@ name_map = {
 # Only keep nutrients that are in both cons.nutrient_ranges and name_map
 valid_nutrients = [k for k in cons.nutrient_ranges.keys() if k in name_map]
 
-# Create a list of the corresponding column names in the CSV for the valid nutrients
-csv_cols = [name_map[n] for n in valid_nutrients]
-
-# Filter the DataFrame to only include these columns (plus Name and Type for reference)
 foods = pd.read_csv('FoodData_with_Optimization_Types.csv')
-# foods = pd.DataFrame(rows)
 foods = foods.fillna(0)  # Fill missing nutrient values with 0
 
 # Remove beverages (coffee, tea, soda, diet drinks, energy drinks, water) - these tend to have very low satiety scores and can skew the optimization
 foods = foods[~foods['Name'].str.contains('coffee|tea|soda|diet|energy drink|water|soft drink', case=False, na=False)] 
+foods = foods.reset_index(drop=True)
 
+# Define keywords for food groups we want to limit to 1 item per day (e.g., only one type of egg, one type of yogurt, etc.)
 keywords_to_limit = ['Egg', 'Yogurt', 'Milk', 'Cheese', 'Fish', 'Chicken', 'Beef', 'Pork', 'Tofu', 'Tempeh', 'Lentil', 'Bean', 'Nut', 'Seed']
+
+food_indices = foods.index.tolist()
 
 # Intialize the Problem
 prob = LpProblem("Meal_Plan_Optimization", LpMaximize)
 
+# creating variety in different meal plans
+num_days = 3
+
 # Create variables dynamically based on Optimization type column
 food_vars = {}
 bin_vars = {}
-for i, row in foods.iterrows():
-    # use the index or a unique ID for the variable name
-    var_name = f"food_{i}"
-    bin_name = f"bin_{i}"
+# We loop through each day and each food item, creating a variable for the amount of that food and a binary variable to indicate whether that food is included in the meal plan for that day.
+for day in range(num_days):
+    for row in foods[['OptimizationType']].itertuples(index=True):
+        i = row.Index
+        # use the index or a unique ID for the variable name
+        var_name = f"food_{day}_{i}"
+        bin_name = f"bin_{day}_{i}"
 
-    # create binary switch
-    bin_vars[i] = LpVariable(bin_name, cat=LpBinary)
+        # create binary switch
+        bin_vars[(day, i)] = LpVariable(bin_name, cat=LpBinary)
 
-    # if the optimization type is discrete, we want an integer variable (0, 1, 2, etc.) representing number of servings
-    if row['OptimizationType'] == 'Discrete':
-        # use integer variable for discrete optimization
-        food_vars[i] = LpVariable(var_name, lowBound=0, upBound= 5, cat=LpInteger)
+        # if the optimization type is discrete, we want an integer variable (0, 1, 2, etc.) representing number of servings
+        if row.OptimizationType == 'Discrete':
+            # use integer variable for discrete optimization
+            food_vars[(day, i)] = LpVariable(var_name, lowBound=0, upBound= 5, cat=LpInteger)
 
-    else:
-        # these can be continuous variables
-        food_vars[i] = LpVariable(var_name, lowBound=0, upBound=5,cat=LpContinuous)
-    
-    # Add constraint to link binary variable with food variable
-    prob += food_vars[i] <= 5 * bin_vars[i], f"Link_{i}_upper"
+        else:
+            # these can be continuous variables
+            food_vars[(day, i)] = LpVariable(var_name, lowBound=0, upBound=5,cat=LpContinuous)
+        
+        # Add constraint to link binary variable with food variable
+        prob += food_vars[(day, i)] <= 5 * bin_vars[(day, i)], f"Link_{day}_{i}_upper"
 
-
-for word in keywords_to_limit:
-    # find all rows that contain the word
-    group_indices = [i for i, row in foods.iterrows() if word.lower() in row['Name'].lower()]
-
-    if group_indices:
-        # the sum of switches for all foods in this group must be <= 1
-        # this prevents the solver from picking multiple versions of eggs
-        prob += lpSum([bin_vars[i] for i in group_indices]) <= 1, f"Limit_{word}"
-
-
-# Calculate energy density and satiety score for each food
+# objective function
 foods['e_density'] = foods['Calories (kcal)'] / foods['Portion size (g)'].replace(0, 100)
 foods['satiety_score'] = (0.5 * foods['Protein (g)']) + (0.3 * foods['Fiber (g)']) - (0.2 * foods['e_density'])
 
+# Group foods by keywords and add constraints to limit the number of similar items (e.g., only one type of egg, one type of yogurt, etc.)
+keyword_groups = {}
+food_names = foods['Name'].astype(str)
+# For each keyword, find the indices of foods that contain that keyword and store them in a dictionary. 
+# We will use this to add constraints later to limit the number of items from each group.
+for word in keywords_to_limit:
+    matching_indices = food_names[food_names.str.contains(word, case=False, na=False)].index.tolist()
+    if matching_indices:
+        keyword_groups[word] = matching_indices
+
+# Pre-extract nutrient values for valid nutrients to speed up constraint creation
+nutrient_values = {name_map[nutrient]: foods[name_map[nutrient]].to_dict() for nutrient in valid_nutrients}
+
+for day in range(num_days):
+    for word, group_indices in keyword_groups.items():
+        # the sum of switches for all foods in this group must be <= 1
+        # this prevents the solver from picking multiple versions of eggs
+        prob += lpSum([bin_vars[(day, i)] for i in group_indices]) <= 1, f"Limit_{word}_day_{day}"
+
 # define objective function 
-prob += lpSum([food_vars[i] * foods.loc[i, 'satiety_score'] for i in foods.index])
+prob += lpSum([food_vars[(day, i)] * foods.at[i, 'satiety_score'] for day in range(num_days) for i in food_indices])
 
-for nutrient in valid_nutrients:
-    # Get the lower and upper bounds for this nutrient from the constraints
-    lower_bound, upper_bound = cons.nutrient_ranges[nutrient]
-    # sum of (amount of food * nutrient in that food)
-    nutrient_sum = lpSum([food_vars[i] * foods.loc[i, name_map[nutrient]] for i in foods.index])
+# Add nutrient constraints for each day and each nutrient
+for day in range(num_days):
+    # randomizes the target
+    day_adj = random.uniform(0.98, 1.02)
 
-    # Add constraints for this nutrient
-    prob += nutrient_sum >= lower_bound, f"{nutrient}_min"
-    prob += nutrient_sum <= upper_bound, f"{nutrient}_max"
+    # Loop through each valid nutrient and add constraints based on the nutrient values in the foods DataFrame
+    for nutrient in valid_nutrients:
+        if nutrient in name_map:
+            # Get the column name for this nutrient and the corresponding nutrient values for all foods
+            col = name_map[nutrient]
+            # Create a dictionary mapping food indices to their nutrient values for this nutrient
+            food_data_dict = nutrient_values[col]
+            # Create the sum of (food variable * nutrient value) for all foods
+            nutrient_sum = lpSum([food_vars[(day, i)] * food_data_dict[i] for i in food_indices])
+            
+            # Get the lower and upper bounds for this nutrient from the constraints
+            lower_bound, upper_bound = cons.nutrient_ranges[nutrient]
+            # Add some random jitter to the nutrient constraints to encourage variety in the meal plans
+            nutri_adj = random.uniform(0.95, 1.05)
+
+            # Calculate the relaxed bounds with the random adjustments
+            relaxed_low = lower_bound * nutri_adj * day_adj
+            relaxed_high = upper_bound * nutri_adj * day_adj
+            # Add constraints for this nutrient
+            prob += nutrient_sum >= relaxed_low, f"{nutrient}_min_day_{day}"
+            prob += nutrient_sum <= relaxed_high, f"{nutrient}_max_day_{day}"
+
+
+# If we are optimizing for multiple days, we want to add constraints to ensure variety across days
+if num_days > 1:
+    for i in food_indices:
+        prob += lpSum([bin_vars[(day, i)] for day in range(num_days)]) <= 1, f"Limit_{i}_appearances"
 
 # solve problem
 prob.solve(HiGHS(msg=False))
 
 # output the meal plan
 if LpStatus[prob.status] == 'Optimal':
-    print("\n--- Optimized Meal Plan ---")
-    for i in foods.index: # Loop through the food items
-        if food_vars[i].varValue and food_vars[i].varValue > 0:
-            if foods.loc[i, 'OptimizationType'] == 'Discrete': # Check if this food is discrete
-                print(f"{int(food_vars[i].varValue)} serving(s) of {foods.loc[i, 'Name']}") # Print the number of servings as an integer
-            else: # If it's continuous, print the amount in grams
-                print(f"{food_vars[i].varValue * foods.loc[i, 'Portion size (g)']}  grams  of {foods.loc[i, 'Name']}")
+    for day in range(num_days):
+        print(f"\n--- Day {day + 1} ---")
+        # Loop through the foods and check which ones were selected for this day (i.e., which food variables have a value greater than 0)
+        for i, optimization_type, name, portion_size in foods[['OptimizationType', 'Name', 'Portion size (g)']].itertuples(index=True, name=None):
+            value = food_vars[(day, i)].varValue
+            # If the value is None or zero, we skip it (i.e., this food is not included in the meal plan for this day)
+            if not value or value <= 0:
+                continue
+
+            if optimization_type == 'Discrete':
+                print(f"{int(value)} serving(s) of {name}")
+            else:
+                print(f"{value * portion_size} grams of {name}")
 else:
     print(f"No optimal solution found. Solver status: {LpStatus[prob.status]}")
 
