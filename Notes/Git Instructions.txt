@@ -68,5 +68,3 @@ After working:
 git add .
 git commit -m "Implement glycemic load constraint"
 git push
-
-I changed something blah blah blah

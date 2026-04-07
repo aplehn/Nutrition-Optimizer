@@ -11,3 +11,5 @@ dill
 pytest
 scipy
 jax
+pandas
+pulp
