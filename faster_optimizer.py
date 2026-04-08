@@ -133,7 +133,7 @@ print(f"\nFinal list of forced foods: {[foods.at[i, 'Name'] for i in selected_fo
 food_vars = {}
 bin_vars = {}
 # We loop through each day and each food item, creating a variable for the amount of that food and a binary variable to indicate whether that food is included in the meal plan for that day.
-for row in foods[['OptimizationType']].itertuples(index=True):
+for row in foods[['OptimizationType', 'FoodCategory']].itertuples(index=True):
     i = row.Index
     # use the index or a unique ID for the variable name
     var_name = f"food_{i}"
@@ -150,10 +150,18 @@ for row in foods[['OptimizationType']].itertuples(index=True):
     else:
         # these can be continuous variables
         food_vars[(i)] = LpVariable(var_name, lowBound=0, upBound=5,cat=LpContinuous)
+
+        # Determine the minimum allowed servings if the food is selected
+    if row.FoodCategory in ['Fruit', 'Vegetable', 'Fruit & Vegetable']:
+        min_servings = 2.0  # Force "a couple" of servings for produce
+    else:
+        min_servings = 0.1  # For other foods, at least 1 serving if selected
     
     # Add constraint to link binary variable with food variable
     prob += food_vars[(i)] <= 3 * bin_vars[(i)], f"Link_{i}_upper"
-    prob += food_vars[(i)] >= 0.1 * bin_vars[(i)], f"Link_{i}_lower"
+    prob += food_vars[(i)] >= min_servings * bin_vars[(i)], f"Link_{i}_lower"
+
+    
 
 
 # If the user has selected specific foods to include in their meal plan, we add constraints to the optimization problem to ensure those foods are included.
@@ -195,9 +203,15 @@ for nutrient in valid_nutrients:
         food_data_dict = nutrient_values[col]
         # Create the sum of (food variable * nutrient value) for all foods
         nutrient_sum = lpSum([food_vars[(i)] * food_data_dict[i] for i in food_indices])
-        
+        gender = input(f"Male or Female: ").strip().lower()
+        if gender == 'male' or gender == 'Male':
+            lower_bound, upper_bound = cons.male_nutrient_ranges[nutrient]
+        elif gender == 'female' or gender == 'Female':
+            lower_bound, upper_bound = cons.female_nutrient_ranges[nutrient]
+        else:
+            print("Invalid input for gender, using general nutrient ranges.")
         # Get the lower and upper bounds for this nutrient from the constraints
-        lower_bound, upper_bound = cons.nutrient_ranges[nutrient]
+        # lower_bound, upper_bound = cons.nutrient_ranges[nutrient]
         # Add some random jitter to the nutrient constraints to encourage variety in the meal plans
 
         if lower_bound is not None:
@@ -226,6 +240,8 @@ veg_weight = lpSum([food_vars[i] * foods.at[i, 'Portion size (g)'] for i in veg_
 # Mathematical logic: Weight >= Total * 0.30
 prob += fruit_weight >= 0.20 * total_weight, "Min_20_Percent_Fruit"
 prob += veg_weight >= 0.30 * total_weight, "Min_30_Percent_Vegetables"
+prob += lpSum([bin_vars[i] for i in fruit_indices]) >= 3, "At_Least_Three_Different_Fruits"
+prob += lpSum([bin_vars[i] for i in veg_indices]) >= 3, "At_Least_Three_Different_Vegetables"
 
 
 # solve problem
