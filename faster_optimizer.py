@@ -67,43 +67,58 @@ prob = LpProblem("Meal_Plan_Optimization", LpMaximize)
 foods['e_density'] = foods['Calories (kcal)'] / foods['Portion size (g)'].replace(0, 100)
 foods['satiety_score'] = (0.5 * foods['Protein (g)']) + (0.3 * foods['Fiber (g)']) - (0.2 * foods['e_density'])
 
-# --- SEARCH AND SELECTION ---
-search_query = input("Enter food you want to eat with meal: ")
 
-# This function uses a regex pattern to check if the food name contains the search query but is not preceded by the word "excluding".
-def exclusion_filter(name, query):
-    # This regex ensures the query isn't preceded by the word "excluding"
-    safe_query = re.escape(query)
-    # The pattern looks for the query anywhere in the string, but only if it's not preceded by "excluding" (with any number of characters in between). 
-    pattern = rf"^(?!.*excluding.*{safe_query}).*{safe_query}"
-    return bool(re.search(pattern, name, re.IGNORECASE)) # This will return True for names that contain the query and are not preceded by "excluding", and False otherwise.
+# --- MULTI-FOOD SEARCH AND SELECTION ---
+selected_foods = []
 
-# Apply the clever filter instead of the simple .contains()
-matches = foods[foods['Name'].apply(lambda x: exclusion_filter(x, search_query))]
-
-if not matches.empty:
-    # Optional: Sort by satiety_score so the best options appear first
-    matches = matches.sort_values(by='satiety_score', ascending=False)
+while True:
+    # Prompt the user to enter a food item they want to eat, or press Enter to finish
+    search_query = input("\nEnter food you want to eat (or press Enter to finish): ").strip()
+    if not search_query:
+        break
     
-    print(f"\n--- Matching Foods for '{search_query}' (Sorted by Satiety) ---")
-    with pd.option_context('display.max_rows', None, 'display.max_colwidth', None):
-        print(matches[['Name']])
-    
-    choice = input("\nEnter the index number (ID) of the food you want: ")
-    try:
-        selected_food = int(choice)
-        # Verify the choice was actually in our filtered list
-        if selected_food in matches.index:
-            print(f"Target locked: {foods.at[selected_food, 'Name']}\n")
-        else:
-            print("That ID was not in the filtered list. Running general optimization.\n")
-            selected_food = None
-    except (ValueError, KeyError):
-        selected_food = None
-        print("Invalid index. Running general optimization instead.\n")
-else:
-    selected_food = None
-    print(f"No results found for '{search_query}' that aren't excluded.\n")
+    # Define a function to filter food names based on the search query while excluding results that contain "excluding [query]"
+    def exclusion_filter(name, query):
+        safe_query = re.escape(query)
+        # The regex pattern uses a negative lookahead to exclude any names that contain "excluding [query]", while still matching names that contain the query itself.
+        pattern = rf"^(?!.*excluding.*{safe_query}).*{safe_query}"
+        return bool(re.search(pattern, name, re.IGNORECASE))
+
+    # Filter the foods DataFrame to find matches based on the search query while excluding results that contain "excluding [query]"
+    matches = foods[foods['Name'].apply(lambda x: exclusion_filter(x, search_query))]
+
+    # If matches are found, sort them by satiety score and display the results to the user, allowing them to select a food item to add to their meal plan.
+    if not matches.empty:
+        # Sort matches by satiety score in descending order to show the most satiating options at the top
+        matches = matches.sort_values(by='satiety_score', ascending=False)
+        print(f"\n--- Matching Foods for '{search_query}' ---")
+        # Display the ID and Name of the matching foods, allowing the user to see the options and select one by its ID number. 
+        with pd.option_context('display.max_rows', 100, 'display.max_colwidth', None):
+            print(matches[['Name']])
+        
+        # Prompt the user to enter the ID number of the food they want to add to their meal plan, or 'c' to cancel the search and enter a new query. 
+        # If the user enters a valid ID number, add that food to the list of selected foods for this day.
+        choice = input("\nEnter the ID number to add this food (or 'c' to cancel search): ")
+        if choice.lower() == 'c':
+            continue
+        
+        # We try to convert the user's input into an integer index. 
+        # If it's a valid index that exists in the foods DataFrame, we add it to the list of selected foods and print a confirmation message. 
+        try:
+            food_idx = int(choice)
+            if food_idx in foods.index:
+                selected_foods.append(food_idx)
+                print(f"Added: {foods.at[food_idx, 'Name']}")
+            else:
+                # If the input is invalid (not an integer or not a valid index), we print an error message and prompt the user again.
+                print("Invalid ID.")
+        except ValueError:
+            print("Invalid input.")
+    else:
+        print(f"No results found for '{search_query}'.")
+
+# After the user has finished entering foods, we print the final list of selected foods that will be forced into the meal plan optimization.
+print(f"\nFinal list of forced foods: {[foods.at[i, 'Name'] for i in selected_foods]}")
 
 
 # Create variables dynamically based on Optimization type column
@@ -133,11 +148,12 @@ for row in foods[['OptimizationType']].itertuples(index=True):
     prob += food_vars[(i)] >= 0.1 * bin_vars[(i)], f"Link_{i}_lower"
 
 
-if selected_food is not None:
-    # Add constraint to ensure the user-selected food is included in the meal plan
-    prob += bin_vars[(selected_food)] == 1, f"Include_{selected_food}"
-
-    prob += food_vars[(selected_food)] >= 1, f"Minimum_{selected_food}"
+# If the user has selected specific foods to include in their meal plan, we add constraints to the optimization problem to ensure those foods are included.
+if selected_foods:
+    for selected_food in selected_foods:
+        # Add constraint to ensure the user-selected food is included in the meal plan
+        prob += bin_vars[(selected_food)] == 1, f"Include_{selected_food}"
+        prob += food_vars[(selected_food)] >= 1, f"Minimum_{selected_food}"
 
 
 
