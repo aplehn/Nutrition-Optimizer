@@ -152,7 +152,7 @@ for row in foods[['OptimizationType']].itertuples(index=True):
         food_vars[(i)] = LpVariable(var_name, lowBound=0, upBound=5,cat=LpContinuous)
     
     # Add constraint to link binary variable with food variable
-    prob += food_vars[(i)] <= 5 * bin_vars[(i)], f"Link_{i}_upper"
+    prob += food_vars[(i)] <= 3 * bin_vars[(i)], f"Link_{i}_upper"
     prob += food_vars[(i)] >= 0.1 * bin_vars[(i)], f"Link_{i}_lower"
 
 
@@ -224,8 +224,8 @@ veg_weight = lpSum([food_vars[i] * foods.at[i, 'Portion size (g)'] for i in veg_
 
 # 4. Add the Percentage Constraints
 # Mathematical logic: Weight >= Total * 0.30
-prob += fruit_weight >= 0.30 * total_weight, "Min_30_Percent_Fruit"
-prob += veg_weight >= 0.20 * total_weight, "Min_20_Percent_Vegetables"
+prob += fruit_weight >= 0.20 * total_weight, "Min_20_Percent_Fruit"
+prob += veg_weight >= 0.30 * total_weight, "Min_30_Percent_Vegetables"
 
 
 # solve problem
