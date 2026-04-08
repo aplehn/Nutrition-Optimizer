@@ -48,6 +48,7 @@ name_map = {
 valid_nutrients = [k for k in cons.nutrient_ranges.keys() if k in name_map]
 
 foods = pd.read_csv('FoodData_with_Optimization_Types.csv')
+foods = foods.sample(frac=1).reset_index(drop=True) # shuffle the foods to encourage variety in the optimization results, we will also add some random jitter to the nutrient constraints to further encourage variety in meal plans
 foods = foods.fillna(0)  # Fill missing nutrient values with 0
 
 # Remove beverages (coffee, tea, soda, diet drinks, energy drinks, water) - these tend to have very low satiety scores and can skew the optimization
