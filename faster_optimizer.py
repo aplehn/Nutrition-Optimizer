@@ -47,7 +47,7 @@ name_map = {
 # Only keep nutrients that are in both cons.nutrient_ranges and name_map
 valid_nutrients = [k for k in cons.nutrient_ranges.keys() if k in name_map]
 
-foods = pd.read_csv('FoodData_with_Optimization_Types.csv')
+foods = pd.read_csv('FoodData_with_Categories.csv')
 foods = foods.sample(frac=1).reset_index(drop=True) # shuffle the foods to encourage variety in the optimization results, we will also add some random jitter to the nutrient constraints to further encourage variety in meal plans
 foods = foods.fillna(0)  # Fill missing nutrient values with 0
 
@@ -207,6 +207,25 @@ for nutrient in valid_nutrients:
             prob += nutrient_sum <= upper_bound, f"{nutrient}_max"
 
         #print(nutrient, lower_bound, upper_bound)
+
+
+# 1. Identify indices for the categories we created earlier
+# We include 'Fruit & Vegetable' in both to be inclusive of mixed produce
+fruit_indices = foods[foods['FoodCategory'].isin(['Fruit', 'Fruit & Vegetable'])].index.tolist()
+veg_indices = foods[foods['FoodCategory'].isin(['Vegetable', 'Fruit & Vegetable'])].index.tolist()
+
+# 2. Define the total weight of all foods in the meal plan
+# Weight = (number of servings) * (grams per serving)
+total_weight = lpSum([food_vars[i] * foods.at[i, 'Portion size (g)'] for i in food_indices])
+
+# 3. Define the weight for Fruits and Vegetables specifically
+fruit_weight = lpSum([food_vars[i] * foods.at[i, 'Portion size (g)'] for i in fruit_indices])
+veg_weight = lpSum([food_vars[i] * foods.at[i, 'Portion size (g)'] for i in veg_indices])
+
+# 4. Add the Percentage Constraints
+# Mathematical logic: Weight >= Total * 0.30
+prob += fruit_weight >= 0.30 * total_weight, "Min_30_Percent_Fruit"
+prob += veg_weight >= 0.20 * total_weight, "Min_20_Percent_Vegetables"
 
 
 # solve problem
