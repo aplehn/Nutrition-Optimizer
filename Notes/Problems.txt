@@ -1,4 +1,4 @@
-raw meats still appear in output
+# raw meats still appear in output
 nutritional totals are sometimes wrong
 omega 3 is definitely wrong every time, always shows minimum value of 1.6 despite heavy seafood recomnedations 
 upper and lower constraints on the variety of foods in the output
