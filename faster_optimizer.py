@@ -1,7 +1,7 @@
 import pandas as pd
 import constraints as cons
 from pulp import HiGHS, LpProblem, LpMaximize, LpVariable, lpSum, LpStatus, LpInteger, LpContinuous, LpBinary
-import random
+import re
 
 name_map = {
     'Energy': 'Calories (kcal)',
@@ -51,7 +51,8 @@ foods = pd.read_csv('FoodData_with_Optimization_Types.csv')
 foods = foods.fillna(0)  # Fill missing nutrient values with 0
 
 # Remove beverages (coffee, tea, soda, diet drinks, energy drinks, water) - these tend to have very low satiety scores and can skew the optimization
-foods = foods[~foods['Name'].str.contains('coffee|tea|soda|diet|energy drink|\bwater\b|soft drink|sugar substitute', case=False, na=False)] 
+beverage_pattern = r'\b(?:coffee|tea|soda|diet|water|energy drink|soft drink|sugar substitute|dessert)\b'
+foods = foods[~foods['Name'].str.contains(beverage_pattern, case=False, na=False)] 
 foods = foods.reset_index(drop=True)
 
 # Define keywords for food groups we want to limit to 1 item per day (e.g., only one type of egg, one type of yogurt, etc.)
@@ -62,37 +63,48 @@ food_indices = foods.index.tolist()
 # Intialize the Problem
 prob = LpProblem("Meal_Plan_Optimization", LpMaximize)
 
-# Clean the Name column: Remove hidden characters and extra spaces
-foods['Name'] = foods['Name'].astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
+# objective function
+foods['e_density'] = foods['Calories (kcal)'] / foods['Portion size (g)'].replace(0, 100)
+foods['satiety_score'] = (0.5 * foods['Protein (g)']) + (0.3 * foods['Fiber (g)']) - (0.2 * foods['e_density'])
 
-user_input = input("Enter a food you want to eat: ").strip()
+# --- SEARCH AND SELECTION ---
+search_query = input("Enter food you want to eat with meal: ")
 
-# 1. Split the input into individual words (e.g., "chicken rice" -> ["chicken", "rice"])
-keywords = user_input.split()
+# This function uses a regex pattern to check if the food name contains the search query but is not preceded by the word "excluding".
+def exclusion_filter(name, query):
+    # This regex ensures the query isn't preceded by the word "excluding"
+    safe_query = re.escape(query)
+    # The pattern looks for the query anywhere in the string, but only if it's not preceded by "excluding" (with any number of characters in between). 
+    pattern = rf"^(?!.*excluding.*{safe_query}).*{safe_query}"
+    return bool(re.search(pattern, name, re.IGNORECASE)) # This will return True for names that contain the query and are not preceded by "excluding", and False otherwise.
 
-# 2. Create a "Mask" that starts as all True
-# We will narrow it down by checking every keyword
-mask = foods['Name'].notna() # Start with everything
-
-for word in keywords:
-    # Update the mask: it must stay True AND contain the current word
-    # regex=False prevents errors if the user types special characters like () or []
-    mask &= foods['Name'].astype(str).str.contains(word, case=False, na=False, regex=False)
-
-matches = foods[mask]
-
-forced_food_index = None
+# Apply the clever filter instead of the simple .contains()
+matches = foods[foods['Name'].apply(lambda x: exclusion_filter(x, search_query))]
 
 if not matches.empty:
-    print("Matching foods:")
-    for idx, row in matches.iterrows():
-        print(f"{idx}: {row['Name']}")
-
-    selected_id = input("\nEnter the ID number you want (or press Enter for the first one): ")
-    forced_food_index = int(selected_id) if selected_id else matches.index[0]
-    print(f"Forcing inclusion of: {foods.at[forced_food_index, 'Name']}")
+    # Optional: Sort by satiety_score so the best options appear first
+    matches = matches.sort_values(by='satiety_score', ascending=False)
+    
+    print(f"\n--- Matching Foods for '{search_query}' (Sorted by Satiety) ---")
+    with pd.option_context('display.max_rows', None, 'display.max_colwidth', None):
+        print(matches[['Name']])
+    
+    choice = input("\nEnter the index number (ID) of the food you want: ")
+    try:
+        selected_food = int(choice)
+        # Verify the choice was actually in our filtered list
+        if selected_food in matches.index:
+            print(f"Target locked: {foods.at[selected_food, 'Name']}\n")
+        else:
+            print("That ID was not in the filtered list. Running general optimization.\n")
+            selected_food = None
+    except (ValueError, KeyError):
+        selected_food = None
+        print("Invalid index. Running general optimization instead.\n")
 else:
-    print("No matching foods found. Proceeding without forcing any food.")
+    selected_food = None
+    print(f"No results found for '{search_query}' that aren't excluded.\n")
+
 
 # Create variables dynamically based on Optimization type column
 food_vars = {}
@@ -120,13 +132,14 @@ for row in foods[['OptimizationType']].itertuples(index=True):
     prob += food_vars[(i)] <= 5 * bin_vars[(i)], f"Link_{i}_upper"
     prob += food_vars[(i)] >= 0.1 * bin_vars[(i)], f"Link_{i}_lower"
 
-if forced_food_index is not None:
-    prob += bin_vars[forced_food_index] == 1, f"Force_{forced_food_index}"
-    prob += food_vars[forced_food_index] >= 1, f"Force_amount_{forced_food_index}"
 
-# objective function
-foods['e_density'] = foods['Calories (kcal)'] / foods['Portion size (g)'].replace(0, 100)
-foods['satiety_score'] = (0.5 * foods['Protein (g)']) + (0.3 * foods['Fiber (g)']) - (0.2 * foods['e_density'])
+if selected_food is not None:
+    # Add constraint to ensure the user-selected food is included in the meal plan
+    prob += bin_vars[(selected_food)] == 1, f"Include_{selected_food}"
+
+    prob += food_vars[(selected_food)] >= 1, f"Minimum_{selected_food}"
+
+
 
 # Group foods by keywords and add constraints to limit the number of similar items (e.g., only one type of egg, one type of yogurt, etc.)
 keyword_groups = {}

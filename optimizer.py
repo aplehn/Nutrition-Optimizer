@@ -51,7 +51,8 @@ foods = pd.read_csv('FoodData_with_Optimization_Types.csv')
 foods = foods.fillna(0)  # Fill missing nutrient values with 0
 
 # Remove beverages (coffee, tea, soda, diet drinks, energy drinks, water) - these tend to have very low satiety scores and can skew the optimization
-foods = foods[~foods['Name'].str.contains('coffee|tea|soda|diet|energy drink|water|soft drink', case=False, na=False)] 
+beverage_pattern = r'\b(?:coffee|tea|soda|diet|water|energy drink|soft drink|sugar substitute)\b'
+foods = foods[~foods['Name'].str.contains(beverage_pattern, case=False, na=False)] 
 foods = foods.reset_index(drop=True)
 
 # Define keywords for food groups we want to limit to 1 item per day (e.g., only one type of egg, one type of yogurt, etc.)

@@ -6,7 +6,8 @@ import constraints as cons
 
 # 1. Load Data
 foods = pd.read_csv('FoodData_Sorted_Filtered.csv').fillna(0)
-foods = foods[~foods['Name'].str.contains('coffee|tea|soda|diet|energy drink|water|soft drink|sugar substitute', case=False, na=False)] 
+beverage_pattern = r'\b(?:coffee|tea|soda|diet|water|energy drink|soft drink|sugar substitute)\b'
+foods = foods[~foods['Name'].str.contains(beverage_pattern, case=False, na=False)] 
 
 def optimize_diet(df, nutrient_ranges, name_map):
     n = len(df)
