@@ -30,7 +30,7 @@ nutrient_ranges = {
     # 'Phosphorus': (700, 4000), # mg
     'Potassium': (3400, None), # mg 3400 mg men, 2600 mg women
     # 'Selenium': (55, 400), # mcg
-    'Sodium': (1500, 2300), # mg
+    'Sodium': (0, 2300), # mg no minimum as prepared food is typically salted, 1500 mg is a good low bound
     # 'Zinc': (11, 40), # mg
     'Protein': (50, None), # g
 # current data is missing these 

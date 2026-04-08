@@ -51,8 +51,15 @@ foods = pd.read_csv('FoodData_with_Optimization_Types.csv')
 foods = foods.fillna(0)  # Fill missing nutrient values with 0
 
 # Remove beverages (coffee, tea, soda, diet drinks, energy drinks, water) - these tend to have very low satiety scores and can skew the optimization
-beverage_pattern = r'\b(?:coffee|tea|soda|diet|water|energy drink|soft drink|sugar substitute|dessert)\b'
+# Other removals: Nutritional supplements, # enriched foods
+beverage_pattern = r'\b(?:coffee|tea|soda|diet|water|energy drink|soft drink|sugar substitute|dessert|nutritional|supplement)\b' #"enriched"
 foods = foods[~foods['Name'].str.contains(beverage_pattern, case=False, na=False)] 
+foods = foods.reset_index(drop=True)
+
+# Remove raw meats - these are typically not consumed in large quantities and can skew the optimization, also often have low satiety scores due to low protein digestibility when raw
+meat_keywords = r'beef|chicken|pork|turkey|fish|salmon|tuna|lamb|veal|ham|bacon|sausage|duck|goat|shrimp|crab|lobster|clams|oysters|mussels|scallops|octopus|squid'
+raw_meat_pattern = rf'(?i)(?=.*\braw\b)(?=.*\b(?:{meat_keywords})\b)'
+foods = foods[~foods['Name'].str.contains(raw_meat_pattern, regex=True, na=False)]
 foods = foods.reset_index(drop=True)
 
 # Define keywords for food groups we want to limit to 1 item per day (e.g., only one type of egg, one type of yogurt, etc.)
@@ -192,9 +199,13 @@ for nutrient in valid_nutrients:
         lower_bound, upper_bound = cons.nutrient_ranges[nutrient]
         # Add some random jitter to the nutrient constraints to encourage variety in the meal plans
 
-        # Add constraints for this nutrient
-        prob += nutrient_sum >= lower_bound, f"{nutrient}_min_"
-        prob += nutrient_sum <= upper_bound, f"{nutrient}_max_"
+        if lower_bound is not None:
+            prob += nutrient_sum >= lower_bound, f"{nutrient}_min"
+
+        if upper_bound is not None:
+            prob += nutrient_sum <= upper_bound, f"{nutrient}_max"
+
+        #print(nutrient, lower_bound, upper_bound)
 
 
 # solve problem
@@ -215,3 +226,30 @@ if LpStatus[prob.status] == 'Optimal':
             print(f"{value * portion_size} grams of {name}")
 else:
     print(f"No optimal solution found. Solver status: {LpStatus[prob.status]}")
+
+# --- PRINT NUTRITIONAL PROFILE ---
+
+print("\n--- Nutritional Profile of Meal Plan ---")
+
+nutrient_totals = {}
+
+for nutrient in valid_nutrients:
+    col = name_map[nutrient]
+
+    total = sum(
+        (food_vars[i].varValue or 0) * foods.at[i, col]
+        for i in food_indices
+    )
+
+    nutrient_totals[nutrient] = total
+
+for nutrient in nutrient_totals:
+    lower_bound, upper_bound = cons.nutrient_ranges[nutrient]
+
+    value = nutrient_totals[nutrient]
+
+    if upper_bound is None:
+        print(f"{nutrient:20} : {value:.2f} (min {lower_bound})")
+
+    else:
+        print(f"{nutrient:20} : {value:.2f} ({lower_bound} - {upper_bound})")
