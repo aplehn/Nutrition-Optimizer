@@ -1,5 +1,5 @@
 import pandas as pd
-import individualized_constraints as cons
+import constraints as cons
 from pulp import HiGHS, LpProblem, LpMaximize, LpVariable, lpSum, LpStatus, LpInteger, LpContinuous, LpBinary
 import re
 

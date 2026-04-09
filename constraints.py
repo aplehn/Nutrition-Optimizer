@@ -1,7 +1,7 @@
 # Default nutrient ranges
 # Quantities provided by copilot, TODO: check sources
 # Minimum values are based on RDA for adults, maximum values are based on UL where available
-nutrient_ranges_general = {
+nutrient_ranges = {
     'Energy': (2000, 2500), # kcal
     'B6_Pyridoxine': (1.3, 100), # mg
     'B12_Cobalamin': (2.4, None), # mcg
