@@ -196,7 +196,9 @@ for row in foods[['OptimizationType', 'FoodCategory']].itertuples(index=True):
 if selected_foods:
     for selected_food in selected_foods:
         # Add constraint to ensure the user-selected food is included in the meal plan
-        minimum_amount = input(f"Enter minimum amount for {foods.at[selected_food, 'Name']} (in servings, default 1): ").strip()
+        name = foods.at[selected_food, 'Name']
+        portion = foods.at[selected_food, 'Portion size (g)']
+        minimum_amount = input(f"Enter minimum amount for {name} ({portion}g) (in servings, default 1): ").strip()
         if not minimum_amount:
             minimum_amount = 1
         else:
