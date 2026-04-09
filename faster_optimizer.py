@@ -1,16 +1,22 @@
 import pandas as pd
-import constraints as cons
+import individualized_constraints as cons
+import optimizer_modes as opmd
 from pulp import HiGHS, LpProblem, LpMaximize, LpVariable, lpSum, LpStatus, LpInteger, LpContinuous, LpBinary
 import re
 
+mode = "cookie_monster"  # or rfk_jr, cookie_monster, bodybuilder, mediterranean, etc.
+print(f"\nOptimization mode: {mode}")
+
+nutrient_ranges = cons.get_nutrient_ranges(
 # User inputs for personalized nutrition constraints
-sex = "female"
-age_years = 30
-weight_kg = 68
-height_cm = 165
-activity_level = "moderate"
-goal = "maintain"
-life_stage = "pregnant"
+    sex = "female",
+    age_years = 30,
+    weight_kg = 68,
+    height_cm = 165,
+    activity_level = "moderate",
+    goal = "maintain",  
+    life_stage = "pregnant"
+)
 
 name_map = {
     'Energy': 'Calories (kcal)',
@@ -54,7 +60,7 @@ name_map = {
 }
 
 # Only keep nutrients that are in both cons.nutrient_ranges and name_map
-valid_nutrients = [k for k in cons.nutrient_ranges.keys() if k in name_map]
+valid_nutrients = [k for k in nutrient_ranges if k in name_map]
 
 foods = pd.read_csv('FoodData_with_Categories.csv')
 foods = foods.sample(frac=1).reset_index(drop=True) # shuffle the foods to encourage variety in the optimization results, we will also add some random jitter to the nutrient constraints to further encourage variety in meal plans
@@ -73,8 +79,8 @@ foods = foods[~foods['Name'].str.contains(raw_meat_pattern, regex=True, na=False
 foods = foods.reset_index(drop=True)
 
 # Define keywords for food groups we want to limit to 1 item per day (e.g., only one type of egg, one type of yogurt, etc.)
-keywords_to_limit = ['Egg', 'Yogurt', 'Milk', 'Cheese', 'Fish', 'Chicken', 'Beef', 'Pork', 'Tofu', 'Tempeh', 'Lentil', 'Bean', 'Nut', 'Seed']
-
+#keywords_to_limit = ['Egg', 'Yogurt', 'Milk', 'Cheese', 'Fish', 'Chicken', 'Beef', 'Pork', 'Tofu', 'Tempeh', 'Lentil', 'Bean', 'Nut', 'Seed']
+keywords_to_limit = ['Egg', 'Yogurt', 'Milk','Tofu', 'Tempeh', 'Lentil']
 food_indices = foods.index.tolist()
 
 # Intialize the Problem
@@ -83,6 +89,11 @@ prob = LpProblem("Meal_Plan_Optimization", LpMaximize)
 # objective function
 foods['e_density'] = foods['Calories (kcal)'] / foods['Portion size (g)'].replace(0, 100)
 foods['satiety_score'] = (0.5 * foods['Protein (g)']) + (0.3 * foods['Fiber (g)']) - (0.2 * foods['e_density'])
+
+#foods = opmd.apply_mode_scores(foods, mode, opmd.MODE_WEIGHTS)
+
+foods = opmd.add_mode_features(foods)
+foods = opmd.apply_mode_scores(foods, mode)
 
 
 # --- MULTI-FOOD SEARCH AND SELECTION ---
@@ -201,7 +212,7 @@ for word, group_indices in keyword_groups.items():
     prob += lpSum([bin_vars[(i)] for i in group_indices]) <= 1, f"Limit_{word}"
 
 # define objective function 
-prob += lpSum([food_vars[(i)] * foods.at[i, 'satiety_score'] for i in food_indices])
+prob += lpSum([food_vars[(i)] * foods.at[i, 'mode_score'] for i in food_indices])
 
 
 for nutrient in valid_nutrients:
@@ -214,7 +225,7 @@ for nutrient in valid_nutrients:
         nutrient_sum = lpSum([food_vars[(i)] * food_data_dict[i] for i in food_indices])
         
         # Get the lower and upper bounds for this nutrient from the constraints
-        lower_bound, upper_bound = cons.nutrient_ranges[nutrient]
+        lower_bound, upper_bound = nutrient_ranges[nutrient]
         # Add some random jitter to the nutrient constraints to encourage variety in the meal plans
 
         if lower_bound is not None:
@@ -283,7 +294,7 @@ for nutrient in valid_nutrients:
     nutrient_totals[nutrient] = total
 
 for nutrient in nutrient_totals:
-    lower_bound, upper_bound = cons.nutrient_ranges[nutrient]
+    lower_bound, upper_bound = nutrient_ranges[nutrient]
 
     value = nutrient_totals[nutrient]
 
