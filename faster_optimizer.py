@@ -4,7 +4,7 @@ import optimizer_modes as opmd
 from pulp import HiGHS, LpProblem, LpMaximize, LpVariable, lpSum, LpStatus, LpInteger, LpContinuous, LpBinary
 import re
 
-mode = "cookie_monster"  # or rfk_jr, cookie_monster, bodybuilder, mediterranean, etc.
+mode = "cookie_monster"  # normal, rfk_jr, cookie_monster, bodybuilder, mediterranean, etc.
 print(f"\nOptimization mode: {mode}")
 
 nutrient_ranges = cons.get_nutrient_ranges(
@@ -16,6 +16,16 @@ nutrient_ranges = cons.get_nutrient_ranges(
     activity_level = "moderate",
     goal = "maintain",  
     life_stage = "pregnant"
+)
+
+foods = pd.read_csv('FoodData_with_Categories.csv')
+foods = foods.sample(frac=1).reset_index(drop=True) # shuffle the foods to encourage variety in the optimization results, we will also add some random jitter to the nutrient constraints to further encourage variety in meal plans
+foods = foods.fillna(0)  # Fill missing nutrient values with 0
+
+foods['Omega-3 Total (g)'] = (
+    foods.get('Omega-3 EPA (g)', 0)
+    + foods.get('Omega-3 DHA (g)', 0)
+    + foods.get('Omega-3 ALA (g)', 0)
 )
 
 name_map = {
@@ -54,21 +64,19 @@ name_map = {
     'Sugars': 'Sugars (g)',
     'Cholesterol': 'Cholesterol (mg)',
     'Starch': 'Starch (g)',
-    'Omega_3': 'Omega-3 EPA (g)',
+    'Omega_3': 'Omega-3 Total (g)',
     'Omega_6': 'Omega-6 (g)',
     
 }
 
+
+
 # Only keep nutrients that are in both cons.nutrient_ranges and name_map
 valid_nutrients = [k for k in nutrient_ranges if k in name_map]
 
-foods = pd.read_csv('FoodData_with_Categories.csv')
-foods = foods.sample(frac=1).reset_index(drop=True) # shuffle the foods to encourage variety in the optimization results, we will also add some random jitter to the nutrient constraints to further encourage variety in meal plans
-foods = foods.fillna(0)  # Fill missing nutrient values with 0
-
 # Remove beverages (coffee, tea, soda, diet drinks, energy drinks, water) - these tend to have very low satiety scores and can skew the optimization
 # Other removals: Nutritional supplements, # enriched foods
-beverage_pattern = r'\b(?:coffee|tea|soda|diet|water|energy drink|soft drink|sugar substitute|dessert|nutritional|supplement)\b' #"enriched"
+beverage_pattern = r'\b(?:coffee|tea|soda|diet|water|energy drink|soft drink|sugar substitute|nutritional|supplement)\b' #"enriched"
 foods = foods[~foods['Name'].str.contains(beverage_pattern, case=False, na=False)] 
 foods = foods.reset_index(drop=True)
 

@@ -14,11 +14,11 @@ MODE_WEIGHTS = {
     },
 
     "cookie_monster": {
-        "satiety_score": 0.2,
+        #"satiety_score": 0.2,
         "is_cookie": 4.0,
-        "is_sweets": 2.0,
-        "Sugars (g)": 1.2,
-        "Carbs (g)": 0.3,
+        #"is_sweets": 2.0,
+        #"Sugars (g)": 1.2,
+        #"Carbs (g)": 0.3,
     },
 
     "bodybuilder": {
@@ -104,7 +104,7 @@ def add_mode_features(foods):
     ).astype(int)
 
     foods['is_cookie'] = foods['Name'].str.contains(
-        r'cookie|oreo|biscuit|wafer|chocolate chip',
+        r'cookie|oreo|chocolate chip',
         case=False, na=False
     ).astype(int)
 
