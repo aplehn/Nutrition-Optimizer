@@ -1,5 +1,5 @@
 import pandas as pd
-import constraints as cons
+import individualized_constraints as cons
 from pulp import HiGHS, LpProblem, LpMaximize, LpVariable, lpSum, LpStatus, LpInteger, LpContinuous, LpBinary
 import re
 
@@ -212,15 +212,9 @@ for nutrient in valid_nutrients:
         food_data_dict = nutrient_values[col]
         # Create the sum of (food variable * nutrient value) for all foods
         nutrient_sum = lpSum([food_vars[(i)] * food_data_dict[i] for i in food_indices])
-        gender = input(f"Male or Female: ").strip().lower()
-        if gender == 'male' or gender == 'Male':
-            lower_bound, upper_bound = cons.male_nutrient_ranges[nutrient]
-        elif gender == 'female' or gender == 'Female':
-            lower_bound, upper_bound = cons.female_nutrient_ranges[nutrient]
-        else:
-            print("Invalid input for gender, using general nutrient ranges.")
+        
         # Get the lower and upper bounds for this nutrient from the constraints
-        # lower_bound, upper_bound = cons.nutrient_ranges[nutrient]
+        lower_bound, upper_bound = cons.nutrient_ranges[nutrient]
         # Add some random jitter to the nutrient constraints to encourage variety in the meal plans
 
         if lower_bound is not None:
