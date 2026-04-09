@@ -4,7 +4,7 @@ import optimizer_modes as opmd
 from pulp import HiGHS, LpProblem, LpMaximize, LpVariable, lpSum, LpStatus, LpInteger, LpContinuous, LpBinary
 import re
 
-mode = "cookie_monster"  # normal, rfk_jr, cookie_monster, bodybuilder, mediterranean, etc.
+mode = "normal"  # normal, rfk_jr, cookie_monster, bodybuilder, mediterranean, etc.
 print(f"\nOptimization mode: {mode}")
 
 nutrient_ranges = cons.get_nutrient_ranges(
@@ -129,8 +129,8 @@ while True:
         matches = matches.sort_values(by='satiety_score', ascending=False)
         print(f"\n--- Matching Foods for '{search_query}' ---")
         # Display the ID and Name of the matching foods, allowing the user to see the options and select one by its ID number. 
-        with pd.option_context('display.max_rows', 100, 'display.max_colwidth', None):
-            print(matches[['Name']])
+        with pd.option_context('display.max_rows', None, 'display.max_colwidth', None):
+            print(matches[['Name', 'Portion size (g)']])
         
         # Prompt the user to enter the ID number of the food they want to add to their meal plan, or 'c' to cancel the search and enter a new query. 
         # If the user enters a valid ID number, add that food to the list of selected foods for this day.
@@ -196,8 +196,13 @@ for row in foods[['OptimizationType', 'FoodCategory']].itertuples(index=True):
 if selected_foods:
     for selected_food in selected_foods:
         # Add constraint to ensure the user-selected food is included in the meal plan
+        minimum_amount = input(f"Enter minimum amount for {foods.at[selected_food, 'Name']} (in servings, default 1): ").strip()
+        if not minimum_amount:
+            minimum_amount = 1
+        else:
+            minimum_amount = float(minimum_amount)
         prob += bin_vars[(selected_food)] == 1, f"Include_{selected_food}"
-        prob += food_vars[(selected_food)] >= 1, f"Minimum_{selected_food}"
+        prob += food_vars[(selected_food)] >= minimum_amount, f"Minimum_{selected_food}"
 
 
 
