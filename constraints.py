@@ -1,7 +1,7 @@
 # Default nutrient ranges
 # Quantities provided by copilot, TODO: check sources
 # Minimum values are based on RDA for adults, maximum values are based on UL where available
-nutrient_ranges = {
+nutrient_ranges_general = {
     'Energy': (2000, 2500), # kcal
     'B6_Pyridoxine': (1.3, 100), # mg
     'B12_Cobalamin': (2.4, None), # mcg
@@ -24,14 +24,14 @@ nutrient_ranges = {
     # "Omega_6": (0, 20), # g unnecessary
 # causes infeasibility in current data set
     'Calcium': (1000, 2500), # mg
-    # 'Copper': (900, 1000), # mcg
+    #'Copper': (900, 1000), # mcg
     'Magnesium': (420, None), # mg 400–420 mg men 310–320 mg women
-    # 'Manganese': (2.3, 11), # mg
-    # 'Phosphorus': (700, 4000), # mg
+    #'Manganese': (2.3, 11), # mg
+    #'Phosphorus': (700, 4000), # mg
     'Potassium': (3400, None), # mg 3400 mg men, 2600 mg women
-    # 'Selenium': (55, 400), # mcg
+    #'Selenium': (55, 400), # mcg
     'Sodium': (0, 2300), # mg no minimum as prepared food is typically salted, 1500 mg is a good low bound
-    # 'Zinc': (11, 40), # mg
+    'Zinc': (11, 40), # mg
     'Protein': (50, None), # g
 # current data is missing these 
     # 'B1_Thiamine': (1.1, 1.2), # mg
@@ -57,6 +57,7 @@ nutrient_ranges = {
     # 'Valine': (0, 5), # g
 }
 
+nutrient_ranges_male = {}
 
 
 # Import cronometer csv for dietary data on user decisions for day

@@ -1,4 +1,14 @@
-# raw meats still appear in output
 nutritional totals are sometimes wrong
-omega 3 is definitely wrong every time, always shows minimum value of 1.6 despite heavy seafood recomnedations 
+omega 3 is definitely wrong every time, always shows minimum value of 1.6 despite heavy seafood recomnedations
+    we used PUFA 18:2 as a sub for omega 3, validate this
+
 upper and lower constraints on the variety of foods in the output
+
+Bias toward beginning of the alphabet, bandaid fix by randomizing the food data
+    With csv shuffling to fix alphabet bias, it may be prudent to remove other meal randomization features
+
+remove basil along with other seasonings and flavorings
+
+raw fix
+
+enter gram weight of food instead of increments of single servings for forced foods

@@ -3,6 +3,15 @@ import constraints as cons
 from pulp import HiGHS, LpProblem, LpMaximize, LpVariable, lpSum, LpStatus, LpInteger, LpContinuous, LpBinary
 import re
 
+# User inputs for personalized nutrition constraints
+sex = "female"
+age_years = 30
+weight_kg = 68
+height_cm = 165
+activity_level = "moderate"
+goal = "maintain"
+life_stage = "pregnant"
+
 name_map = {
     'Energy': 'Calories (kcal)',
     'Protein': 'Protein (g)',
