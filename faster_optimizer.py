@@ -18,7 +18,7 @@ nutrient_ranges = cons.get_nutrient_ranges(
     life_stage = "pregnant"
 )
 
-foods = pd.read_csv('FoodData_with_Categories.csv')
+foods = pd.read_csv('FoodData_Categorized_v7.csv')
 foods = foods.sample(frac=1).reset_index(drop=True) # shuffle the foods to encourage variety in the optimization results, we will also add some random jitter to the nutrient constraints to further encourage variety in meal plans
 foods = foods.fillna(0)  # Fill missing nutrient values with 0
 
@@ -88,7 +88,7 @@ foods = foods.reset_index(drop=True)
 
 # Define keywords for food groups we want to limit to 1 item per day (e.g., only one type of egg, one type of yogurt, etc.)
 #keywords_to_limit = ['Egg', 'Yogurt', 'Milk', 'Cheese', 'Fish', 'Chicken', 'Beef', 'Pork', 'Tofu', 'Tempeh', 'Lentil', 'Bean', 'Nut', 'Seed']
-keywords_to_limit = ['Egg', 'Yogurt', 'Milk','Tofu', 'Tempeh', 'Lentil']
+keywords_to_limit = ['Egg', 'Yogurt', 'Milk','Tofu', 'Tempeh', 'Lentil', 'Fish', 'Chicken', 'Beef', 'Clams']
 food_indices = foods.index.tolist()
 
 # Intialize the Problem
@@ -173,17 +173,19 @@ for row in foods[['OptimizationType', 'FoodCategory']].itertuples(index=True):
     # if the optimization type is discrete, we want an integer variable (0, 1, 2, etc.) representing number of servings
     if row.OptimizationType == 'Discrete':
         # use integer variable for discrete optimization
-        food_vars[(i)] = LpVariable(var_name, lowBound=0, upBound= 5, cat=LpInteger)
+        food_vars[(i)] = LpVariable(var_name, lowBound=0, upBound= 2, cat=LpInteger)
 
     else:
         # these can be continuous variables
-        food_vars[(i)] = LpVariable(var_name, lowBound=0, upBound=5,cat=LpContinuous)
+        food_vars[(i)] = LpVariable(var_name, lowBound=0, upBound=2,cat=LpContinuous)
 
         # Determine the minimum allowed servings if the food is selected
     if row.FoodCategory in ['Fruit', 'Vegetable', 'Fruit & Vegetable']:
         min_servings = 2.0  # Force "a couple" of servings for produce
+    elif row.FoodCategory == 'Meal':
+        min_servings = 2.0  # For meals, at least 2 servings if selected
     else:
-        min_servings = 0.1  # For other foods, at least 1 serving if selected
+        min_servings = 0.1  # For other foods, at least 0.1 serving if selected
     
     # Add constraint to link binary variable with food variable
     prob += food_vars[(i)] <= 3 * bin_vars[(i)], f"Link_{i}_upper"
@@ -251,6 +253,10 @@ for nutrient in valid_nutrients:
 
         #print(nutrient, lower_bound, upper_bound)
 
+# identify indices for the categories meals
+meal_indices = foods[foods['FoodCategory'] == 'Meal'].index.tolist()
+
+prob += lpSum([bin_vars[i] for i in meal_indices]) >= 2, "At_Least_Two_Different_Meals"
 
 # 1. Identify indices for the categories we created earlier
 # We include 'Fruit & Vegetable' in both to be inclusive of mixed produce
@@ -278,17 +284,51 @@ prob.solve(HiGHS(msg=False))
 
 # output the meal plan
 if LpStatus[prob.status] == 'Optimal':
-    # Loop through the foods and check which ones were selected for this day (i.e., which food variables have a value greater than 0)
-    for i, optimization_type, name, portion_size in foods[['OptimizationType', 'Name', 'Portion size (g)']].itertuples(index=True, name=None):
-        value = food_vars[(i)].varValue
-        # If the value is None or zero, we skip it (i.e., this food is not included in the meal plan for this day)
-        if not value or value <= 0:
-            continue
+    selected_foods = []
 
-        if food_vars[(i)].cat == LpInteger:
-            print(f"{int(value)} serving(s) of {name}")
+    # 1. Define the order of priority (Lower number = appears first)
+    priority_map = {
+        'Meal': 0,
+        'Vegetable': 1,
+        'Fruit': 2,
+        'Fruit & Vegetable': 3,
+        'Snack': 4,
+        'Other': 5
+    }
+
+    # 2. Collect selected foods
+    for i, category, name, portion_size in foods[['FoodCategory', 'Name', 'Portion size (g)']].itertuples(index=True, name=None):
+        value = food_vars[i].varValue
+        
+        if value and value > 0:
+            selected_foods.append({
+                'category': category,
+                'name': name,
+                'portion_size': portion_size,
+                'value': value,
+                'is_integer': food_vars[i].cat == LpInteger
+            })
+
+    # 3. Sort using the priority map
+    # .get(..., 99) is a safety net in case a category isn't in our map
+    selected_foods.sort(key=lambda x: priority_map.get(x['category'], 99))
+
+    # 4. Print the results
+    print(f"--- Optimized Meal Plan ---")
+    current_cat = None
+    
+    for item in selected_foods:
+        # Optional: Print a header when the category changes
+        if item['category'] != current_cat:
+            current_cat = item['category']
+            print(f"\n[{current_cat}s]") 
+            
+        if item['is_integer']:
+            print(f" - {int(item['value'])} serving(s) of {item['name']}")
         else:
-            print(f"{value * portion_size} grams of {name}")
+            amount = item['value'] * item['portion_size']
+            print(f" - {amount:.2f} grams of {item['name']}")
+
 else:
     print(f"No optimal solution found. Solver status: {LpStatus[prob.status]}")
 
