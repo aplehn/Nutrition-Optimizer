@@ -1,6 +1,7 @@
 nutritional totals are sometimes wrong
 omega 3 is definitely wrong every time, always shows minimum value of 1.6 despite heavy seafood recomnedations
     we used PUFA 18:2 as a sub for omega 3, validate this
+    Despite
 
 upper and lower constraints on the variety of foods in the output
 
@@ -9,6 +10,6 @@ Bias toward beginning of the alphabet, bandaid fix by randomizing the food data
 
 remove basil along with other seasonings and flavorings
 
-raw fix
-
 enter gram weight of food instead of increments of single servings for forced foods
+
+find a data category for full/prepared meals in the json and use constraints to structure a more feasible plan around main courses and sides
