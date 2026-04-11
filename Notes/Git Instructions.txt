@@ -68,3 +68,7 @@ After working:
 git add .
 git commit -m "Implement glycemic load constraint"
 git push
+
+In case of a conflict, to overwrite your existing changes with what is currently in main, use the following commands
+git fetch origin
+git reset --hard origin/main
