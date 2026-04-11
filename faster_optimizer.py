@@ -18,7 +18,7 @@ nutrient_ranges = cons.get_nutrient_ranges(
     life_stage = "pregnant"
 )
 
-foods = pd.read_csv('FoodData_Categorized_v7.csv')
+foods = pd.read_csv('FoodData_Categorized_v8.csv')
 foods = foods.sample(frac=1).reset_index(drop=True) # shuffle the foods to encourage variety in the optimization results, we will also add some random jitter to the nutrient constraints to further encourage variety in meal plans
 foods = foods.fillna(0)  # Fill missing nutrient values with 0
 
