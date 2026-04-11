@@ -173,11 +173,11 @@ for row in foods[['OptimizationType', 'FoodCategory']].itertuples(index=True):
     # if the optimization type is discrete, we want an integer variable (0, 1, 2, etc.) representing number of servings
     if row.OptimizationType == 'Discrete':
         # use integer variable for discrete optimization
-        food_vars[(i)] = LpVariable(var_name, lowBound=0, upBound= 2, cat=LpInteger)
+        food_vars[(i)] = LpVariable(var_name, lowBound=0, upBound= 3, cat=LpInteger)
 
     else:
         # these can be continuous variables
-        food_vars[(i)] = LpVariable(var_name, lowBound=0, upBound=2,cat=LpContinuous)
+        food_vars[(i)] = LpVariable(var_name, lowBound=0, upBound=3,cat=LpContinuous)
 
         # Determine the minimum allowed servings if the food is selected
     if row.FoodCategory in ['Fruit', 'Vegetable', 'Fruit & Vegetable']:
@@ -229,9 +229,9 @@ for word, group_indices in keyword_groups.items():
     prob += lpSum([bin_vars[(i)] for i in group_indices]) <= 1, f"Limit_{word}"
 
 # define objective function 
-prob += lpSum([food_vars[(i)] * foods.at[i, 'mode_score'] for i in food_indices])
+# prob += lpSum([food_vars[(i)] * foods.at[i, 'mode_score'] for i in food_indices])
 
-
+slack_vars = {}
 for nutrient in valid_nutrients:
     if nutrient in name_map:
         # Get the column name for this nutrient and the corresponding nutrient values for all foods
@@ -245,13 +245,23 @@ for nutrient in valid_nutrients:
         lower_bound, upper_bound = nutrient_ranges[nutrient]
         # Add some random jitter to the nutrient constraints to encourage variety in the meal plans
 
+        low_slack = LpVariable(f"{nutrient}_low_slack", lowBound=0)
+        up_slack = LpVariable(f"{nutrient}_up_slack", lowBound=0)
+        slack_vars[nutrient] = {'low': low_slack, 'up': up_slack}
+
         if lower_bound is not None:
-            prob += nutrient_sum >= lower_bound, f"{nutrient}_min"
+            prob += nutrient_sum + low_slack >= lower_bound, f"{nutrient}_min"
 
         if upper_bound is not None:
-            prob += nutrient_sum <= upper_bound, f"{nutrient}_max"
+            prob += nutrient_sum - up_slack <= upper_bound, f"{nutrient}_max"
 
         #print(nutrient, lower_bound, upper_bound)
+
+# update the objective function to penalize slacks
+# we multiply the slacks by a very large number so the solver only uses them if it absolutely has to
+penalty_weight = 1000000
+prob += lpSum([food_vars[(i)] * foods.at[i, 'mode_score'] for i in food_indices]) - penalty_weight * lpSum([slack_vars[nutrient]['low'] + slack_vars[nutrient]['up'] for nutrient in valid_nutrients])
+
 
 # identify indices for the categories meals
 meal_indices = foods[foods['FoodCategory'] == 'Meal'].index.tolist()
@@ -281,6 +291,41 @@ prob += lpSum([bin_vars[i] for i in veg_indices]) >= 3, "At_Least_Three_Differen
 
 # solve problem
 prob.solve(HiGHS(msg=False))
+
+# 1. It starts as an empty dictionary
+nutrient_totals = {}
+
+# 2. It loops through every nutrient you defined as "valid"
+for nutrient in valid_nutrients:
+    col = name_map[nutrient]
+
+    # 3. It performs a "Sum" calculation: 
+    # (Servings chosen by solver) * (Nutrient amount in that food)
+    total = sum(
+        (food_vars[i].varValue or 0) * foods.at[i, col]
+        for i in food_indices
+    )
+
+    # 4. It stores that result in the dictionary
+    nutrient_totals[nutrient] = total
+
+# Check for violations first
+violations = []
+for nutrient in valid_nutrients:
+    val = nutrient_totals[nutrient]
+    low, high = nutrient_ranges[nutrient]
+    
+    if low and val < (low - 0.01):
+        violations.append(f"[SHORTFALL] {nutrient}: {val:.2f} (Minimum is {low})")
+    if high and val > (high + 0.01):
+        violations.append(f"[EXCESS] {nutrient}: {val:.2f} (Maximum is {high})")
+
+if violations:
+    print("THE FOLLOWING CONSTRAINTS WERE BROKEN:")
+    for v in violations:
+        print(f"  {v}")
+else:
+    print("All constraints successfully met.")
 
 # output the meal plan
 if LpStatus[prob.status] == 'Optimal':
@@ -314,7 +359,7 @@ if LpStatus[prob.status] == 'Optimal':
     selected_foods.sort(key=lambda x: priority_map.get(x['category'], 99))
 
     # 4. Print the results
-    print(f"--- Optimized Meal Plan ---")
+    print(f"--- Meal Plan ---")
     current_cat = None
     
     for item in selected_foods:
@@ -331,6 +376,8 @@ if LpStatus[prob.status] == 'Optimal':
 
 else:
     print(f"No optimal solution found. Solver status: {LpStatus[prob.status]}")
+
+
 
 # --- PRINT NUTRITIONAL PROFILE ---
 
