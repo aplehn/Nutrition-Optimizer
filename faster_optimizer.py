@@ -86,6 +86,11 @@ raw_meat_pattern = rf'(?i)(?=.*\braw\b)(?=.*\b(?:{meat_keywords})\b)'
 foods = foods[~foods['Name'].str.contains(raw_meat_pattern, regex=True, na=False)]
 foods = foods.reset_index(drop=True)
 
+# Remove spices and other impractical edge cases
+edge_pattern = r'\b(?:basil|oregano|thyme|rosemary|cilantro|parsley|dill|tarragon)\b'
+foods = foods[~foods['Name'].str.contains(edge_pattern, case=False, na=False)] 
+foods = foods.reset_index(drop=True)
+
 # Define keywords for food groups we want to limit to 1 item per day (e.g., only one type of egg, one type of yogurt, etc.)
 #keywords_to_limit = ['Egg', 'Yogurt', 'Milk', 'Cheese', 'Fish', 'Chicken', 'Beef', 'Pork', 'Tofu', 'Tempeh', 'Lentil', 'Bean', 'Nut', 'Seed']
 keywords_to_limit = ['Egg', 'Yogurt', 'Milk','Tofu', 'Tempeh', 'Lentil', 'Fish', 'Chicken', 'Beef', 'Clams']
