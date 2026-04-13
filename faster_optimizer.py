@@ -123,7 +123,7 @@ from rich.prompt import Prompt, IntPrompt
 console = Console()
 
 # --- PHASE 1: GLOBAL EXCLUSIONS (BLACKLIST) ---
-console.print(Panel("[bold red]PHASE 1: BLACKLIST (Remove Unwanted Foods)[/bold red]\n[italic]Pruning the design space to ensure human-centric feasibility.[/italic]", expand=False))
+console.print(Panel("[bold red]PHASE 1: BLACKLIST (Remove Unwanted Foods)[/bold red]", expand=False))
 excluded_indices = []
 
 while True:
@@ -146,10 +146,9 @@ while True:
         table = Table(title=f"Potential Exclusions for '{exclude_query}'", header_style="bold magenta")
         table.add_column("ID", justify="right", style="dim")
         table.add_column("Food Name")
-        table.add_column("Category")
         
-        for idx, row in matches.head(20).iterrows():
-            table.add_row(str(idx), row['Name'], row['FoodCategory'])
+        for idx, row in matches.head(None).iterrows():
+            table.add_row(str(idx), row['Name'])
         console.print(table)
         
         action = Prompt.ask("Action", choices=["all", "id", "c"], default="all")
@@ -168,11 +167,11 @@ while True:
 if excluded_indices:
     foods = foods.drop(index=list(set(excluded_indices))).reset_index(drop=True)
     food_indices = foods.index.tolist()
-    console.print(f"\n[bold green]Domain Pruning Complete.[/bold green] {len(foods)} variables remaining.")
+    console.print(f"\n[bold green]Removing Complete.[/bold green] {len(foods)} food items remaining.")
 
 
 # --- PHASE 2: MULTI-FOOD SEARCH AND SELECTION (INCLUDE) ---
-console.print(Panel("[bold green]PHASE 2: SELECTION (Force Foods Into Plan)[/bold green]\n[italic]Anchoring the design to specific user preferences.[/italic]", expand=False))
+console.print(Panel("[bold green]PHASE 2: SELECTION (Force Foods Into Plan)[/bold green]", expand=False))
 selected_foods = []
 
 while True:
@@ -189,7 +188,7 @@ while True:
         table.add_column("Food Name")
         table.add_column("Satiety")
         
-        for idx, row in matches.head(20).iterrows():
+        for idx, row in matches.head(None).iterrows():
             table.add_row(str(idx), row['Name'], f"{row['satiety_score']:.2f}")
         console.print(table)
         
