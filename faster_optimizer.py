@@ -9,13 +9,13 @@ print(f"\nOptimization mode: {mode}")
 
 nutrient_ranges = cons.get_nutrient_ranges(
 # User inputs for personalized nutrition constraints
-    sex = "female",
+    sex = "male",
     age_years = 30,
     weight_kg = 68,
     height_cm = 165,
     activity_level = "moderate",
     goal = "maintain",  
-    life_stage = "pregnant"
+    life_stage = "adult"
 )
 
 foods = pd.read_csv('FoodData_Categorized_v8.csv')
