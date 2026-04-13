@@ -76,7 +76,7 @@ valid_nutrients = [k for k in nutrient_ranges if k in name_map]
 
 # Remove beverages (coffee, tea, soda, diet drinks, energy drinks, water) - these tend to have very low satiety scores and can skew the optimization
 # Other removals: Nutritional supplements, # enriched foods
-beverage_pattern = r'\b(?:coffee|tea|soda|diet|water|energy drink|soft drink|sugar substitute|nutritional|supplement)\b' #"enriched"
+beverage_pattern = r'\b(?:coffee|tea|soda|diet|water|energy drink|soft drink|sugar substitute|nutritional|supplement|Baby)\b' #"enriched"
 foods = foods[~foods['Name'].str.contains(beverage_pattern, case=False, na=False)] 
 foods = foods.reset_index(drop=True)
 
@@ -115,109 +115,96 @@ def exclusion_filter(name, query):
     pattern = rf"^(?!.*excluding.*{safe_query}).*{safe_query}"
     return bool(re.search(pattern, name, re.IGNORECASE))
 
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.prompt import Prompt, IntPrompt
 
-# --- GLOBAL EXCLUSIONS (BLACKLIST) ---
+console = Console()
+
+# --- PHASE 1: GLOBAL EXCLUSIONS (BLACKLIST) ---
+console.print(Panel("[bold red]PHASE 1: BLACKLIST (Remove Unwanted Foods)[/bold red]\n[italic]Pruning the design space to ensure human-centric feasibility.[/italic]", expand=False))
 excluded_indices = []
-print("\n--- Food Exclusion (Blacklist) ---")
 
 while True:
-    exclude_query = input("\nSearch for foods to EXCLUDE (or press Enter to finish): ").strip()
-    if not exclude_query:
-        break
+    exclude_query = Prompt.ask("\nSearch to [bold red]EXCLUDE[/bold red] (or [bold yellow]Enter[/bold yellow] to finish)")
+    if not exclude_query: break
 
-    # If they typed a number directly, exclude that ID immediately
+    # Direct ID Exclusion
     if exclude_query.isdigit():
         idx = int(exclude_query)
         if idx in foods.index:
             excluded_indices.append(idx)
-            print(f"Restricted: {foods.at[idx, 'Name']}")
+            console.print(f"[bold red]Restricted:[/bold red] {foods.at[idx, 'Name']}")
         continue
 
-    # Otherwise, search and display results so we can see the IDs
+    # Keyword Search for Exclusion
     matches = foods[foods['Name'].apply(lambda x: exclusion_filter(x, exclude_query))]
-    
     if not matches.empty:
         matches = matches.sort_values(by='satiety_score', ascending=False)
-        print(f"\n--- Matching Foods to Exclude for '{exclude_query}' ---")
-        # The number on the far left is the ID (Index)
-        with pd.option_context('display.max_rows', None, 'display.max_colwidth', None):
-            print(matches[['Name', 'Portion size (g)']])
         
-        print("\nOPTIONS: Type 'all' to exclude everything above,")
-        print("         Type the specific ID number to exclude just one,")
-        print("         Or type 'c' to cancel this search.")
+        table = Table(title=f"Potential Exclusions for '{exclude_query}'", header_style="bold magenta")
+        table.add_column("ID", justify="right", style="dim")
+        table.add_column("Food Name")
+        table.add_column("Category")
         
-        choice = input("Your choice: ").strip().lower()
+        for idx, row in matches.head(20).iterrows():
+            table.add_row(str(idx), row['Name'], row['FoodCategory'])
+        console.print(table)
         
-        if choice == 'all':
+        action = Prompt.ask("Action", choices=["all", "id", "c"], default="all")
+        if action == "all":
             excluded_indices.extend(matches.index.tolist())
-            print(f"Restricted all {len(matches)} items.")
-        elif choice.isdigit():
-            idx = int(choice)
-            if idx in matches.index:
-                excluded_indices.append(idx)
-                print(f"Restricted: {foods.at[idx, 'Name']}")
-        else:
-            print("Search cancelled.")
+            console.print(f"[bold red]Restricted all {len(matches)} items.[/bold red]")
+        elif action == "id":
+            target_id = IntPrompt.ask("Enter specific ID to exclude")
+            if target_id in matches.index:
+                excluded_indices.append(target_id)
+                console.print(f"[bold red]Restricted:[/bold red] {foods.at[target_id, 'Name']}")
     else:
-        print(f"No results found for '{exclude_query}'.")
+        console.print(f"[yellow]No results found for '{exclude_query}'.[/yellow]")
 
-# Apply the removals once at the end of the blacklist phase
+# Apply removals
 if excluded_indices:
     foods = foods.drop(index=list(set(excluded_indices))).reset_index(drop=True)
     food_indices = foods.index.tolist()
-    print(f"\nBlacklist applied. {len(foods)} items remaining in design space.")
+    console.print(f"\n[bold green]Domain Pruning Complete.[/bold green] {len(foods)} variables remaining.")
 
 
-# --- MULTI-FOOD SEARCH AND SELECTION ---
+# --- PHASE 2: MULTI-FOOD SEARCH AND SELECTION (INCLUDE) ---
+console.print(Panel("[bold green]PHASE 2: SELECTION (Force Foods Into Plan)[/bold green]\n[italic]Anchoring the design to specific user preferences.[/italic]", expand=False))
 selected_foods = []
 
 while True:
-    # Prompt the user to enter a food item they want to eat, or press Enter to finish
-    search_query = input("\nEnter food you want to eat (or press Enter to finish): ").strip()
-    if not search_query:
-        break
-    
-    # Define a function to filter food names based on the search query while excluding results that contain "excluding [query]"
-    def exclusion_filter(name, query):
-        safe_query = re.escape(query)
-        # The regex pattern uses a negative lookahead to exclude any names that contain "excluding [query]", while still matching names that contain the query itself.
-        pattern = rf"^(?!.*excluding.*{safe_query}).*{safe_query}"
-        return bool(re.search(pattern, name, re.IGNORECASE))
+    search_query = Prompt.ask("\nSearch to [bold green]INCLUDE[/bold green] (or [bold yellow]Enter[/bold yellow] to finish)")
+    if not search_query: break
 
-    # Filter the foods DataFrame to find matches based on the search query while excluding results that contain "excluding [query]"
     matches = foods[foods['Name'].apply(lambda x: exclusion_filter(x, search_query))]
 
-    # If matches are found, sort them by satiety score and display the results to the user, allowing them to select a food item to add to their meal plan.
     if not matches.empty:
-        # Sort matches by satiety score in descending order to show the most satiating options at the top
         matches = matches.sort_values(by='satiety_score', ascending=False)
-        print(f"\n--- Matching Foods for '{search_query}' ---")
-        # Display the ID and Name of the matching foods, allowing the user to see the options and select one by its ID number. 
-        with pd.option_context('display.max_rows', None, 'display.max_colwidth', None):
-            print(matches[['Name', 'Portion size (g)']])
         
-        # Prompt the user to enter the ID number of the food they want to add to their meal plan, or 'c' to cancel the search and enter a new query. 
-        # If the user enters a valid ID number, add that food to the list of selected foods for this day.
-        choice = input("\nEnter the ID number to add this food (or 'c' to cancel search): ")
-        if choice.lower() == 'c':
-            continue
+        table = Table(title=f"Matches for '{search_query}'", header_style="bold cyan")
+        table.add_column("ID", justify="right", style="dim")
+        table.add_column("Food Name")
+        table.add_column("Satiety")
         
-        # We try to convert the user's input into an integer index. 
-        # If it's a valid index that exists in the foods DataFrame, we add it to the list of selected foods and print a confirmation message. 
-        try:
+        for idx, row in matches.head(20).iterrows():
+            table.add_row(str(idx), row['Name'], f"{row['satiety_score']:.2f}")
+        console.print(table)
+        
+        choice = Prompt.ask("Enter ID to add (or [bold yellow]c[/bold yellow] to cancel)")
+        if choice.lower() == 'c': continue
+        
+        if choice.isdigit():
             food_idx = int(choice)
             if food_idx in foods.index:
                 selected_foods.append(food_idx)
-                print(f"Added: {foods.at[food_idx, 'Name']}")
+                console.print(f"[bold green]Added to Anchor List:[/bold green] {foods.at[food_idx, 'Name']}")
             else:
-                # If the input is invalid (not an integer or not a valid index), we print an error message and prompt the user again.
-                print("Invalid ID.")
-        except ValueError:
-            print("Invalid input.")
+                console.print("[red]Invalid ID.[/red]")
     else:
-        print(f"No results found for '{search_query}'.")
-
+        console.print(f"[yellow]No results for '{search_query}'.[/yellow]")
 # After the user has finished entering foods, we print the final list of selected foods that will be forced into the meal plan optimization.
 print(f"\nFinal list of forced foods: {[foods.at[i, 'Name'] for i in selected_foods]}")
 
