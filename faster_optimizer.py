@@ -251,7 +251,7 @@ if selected_foods:
         # Add constraint to ensure the user-selected food is included in the meal plan
         name = foods.at[selected_food, 'Name']
         portion = foods.at[selected_food, 'Portion size (g)']
-        minimum_amount = input(f"Enter minimum amount for {name} ({portion}g) (in servings, default 1): ").strip()
+        minimum_amount = Prompt.ask(f"\nEnter minimum amount for {name} ({portion}g) (in servings, default 1)")
         if not minimum_amount:
             minimum_amount = 1
         else:
@@ -321,7 +321,7 @@ prob += lpSum([bin_vars[i] for i in meal_indices]) >= 2, "At_Least_Two_Different
 
 # 1. Identify indices for the categories we created earlier
 # We include 'Fruit & Vegetable' in both to be inclusive of mixed produce
-fruit_indices = foods[foods['FoodCategory'].isin(['Fruit', 'Fruit & Vegetable'])].index.tolist()
+fruit_indices = foods[foods['FoodCategory'].isin(['Fruit'])].index.tolist()
 veg_indices = foods[foods['FoodCategory'].isin(['Vegetable', 'Fruit & Vegetable'])].index.tolist()
 
 # 2. Define the total weight of all foods in the meal plan
