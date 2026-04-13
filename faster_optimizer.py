@@ -109,6 +109,66 @@ foods = opmd.add_mode_features(foods)
 foods = opmd.apply_mode_scores(foods, mode)
 
 
+def exclusion_filter(name, query):
+    safe_query = re.escape(query)
+    # Excludes names containing "excluding [query]" while matching names containing the query
+    pattern = rf"^(?!.*excluding.*{safe_query}).*{safe_query}"
+    return bool(re.search(pattern, name, re.IGNORECASE))
+
+
+# --- GLOBAL EXCLUSIONS (BLACKLIST) ---
+excluded_indices = []
+print("\n--- Food Exclusion (Blacklist) ---")
+
+while True:
+    exclude_query = input("\nSearch for foods to EXCLUDE (or press Enter to finish): ").strip()
+    if not exclude_query:
+        break
+
+    # If they typed a number directly, exclude that ID immediately
+    if exclude_query.isdigit():
+        idx = int(exclude_query)
+        if idx in foods.index:
+            excluded_indices.append(idx)
+            print(f"Restricted: {foods.at[idx, 'Name']}")
+        continue
+
+    # Otherwise, search and display results so we can see the IDs
+    matches = foods[foods['Name'].apply(lambda x: exclusion_filter(x, exclude_query))]
+    
+    if not matches.empty:
+        matches = matches.sort_values(by='satiety_score', ascending=False)
+        print(f"\n--- Matching Foods to Exclude for '{exclude_query}' ---")
+        # The number on the far left is the ID (Index)
+        with pd.option_context('display.max_rows', None, 'display.max_colwidth', None):
+            print(matches[['Name', 'Portion size (g)']])
+        
+        print("\nOPTIONS: Type 'all' to exclude everything above,")
+        print("         Type the specific ID number to exclude just one,")
+        print("         Or type 'c' to cancel this search.")
+        
+        choice = input("Your choice: ").strip().lower()
+        
+        if choice == 'all':
+            excluded_indices.extend(matches.index.tolist())
+            print(f"Restricted all {len(matches)} items.")
+        elif choice.isdigit():
+            idx = int(choice)
+            if idx in matches.index:
+                excluded_indices.append(idx)
+                print(f"Restricted: {foods.at[idx, 'Name']}")
+        else:
+            print("Search cancelled.")
+    else:
+        print(f"No results found for '{exclude_query}'.")
+
+# Apply the removals once at the end of the blacklist phase
+if excluded_indices:
+    foods = foods.drop(index=list(set(excluded_indices))).reset_index(drop=True)
+    food_indices = foods.index.tolist()
+    print(f"\nBlacklist applied. {len(foods)} items remaining in design space.")
+
+
 # --- MULTI-FOOD SEARCH AND SELECTION ---
 selected_foods = []
 
