@@ -4,7 +4,7 @@ import optimizer_modes as opmd
 from pulp import HiGHS, LpProblem, LpMaximize, LpVariable, lpSum, LpStatus, LpInteger, LpContinuous, LpBinary
 import re
 
-mode = "normal"  # normal, rfk_jr, cookie_monster, bodybuilder, mediterranean, etc.
+mode = "bodybuilder"  # normal, rfk_jr, cookie_monster, bodybuilder, mediterranean, etc.
 print(f"\nOptimization mode: {mode}")
 
 nutrient_ranges = cons.get_nutrient_ranges(
@@ -76,7 +76,7 @@ valid_nutrients = [k for k in nutrient_ranges if k in name_map]
 
 # Remove beverages (coffee, tea, soda, diet drinks, energy drinks, water) - these tend to have very low satiety scores and can skew the optimization
 # Other removals: Nutritional supplements, # enriched foods
-beverage_pattern = r'\b(?:coffee|tea|soda|diet|water|energy drink|soft drink|sugar substitute|nutritional|supplement|Baby)\b' #"enriched"
+beverage_pattern = r'\b(?:coffee|tea|soda|diet|water|energy drink|soft drink|sugar substitute|nutritional|supplement|Baby|Toddler|Textured vegetable protein)\b' #"enriched"
 foods = foods[~foods['Name'].str.contains(beverage_pattern, case=False, na=False)] 
 foods = foods.reset_index(drop=True)
 

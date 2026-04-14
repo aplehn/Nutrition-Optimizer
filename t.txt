@@ -1,0 +1,81 @@
+[Meals]
+ - 660.00 grams of Beef chow mein or chop suey, no noodles
+ - 462.00 grams of Beef shish kabob with vegetables, excluding potatoes
+[Vegetables]
+ - 36.97 grams of Collards, raw
+ - 51.00 grams of Alfalfa sprouts, raw
+ - 84.00 grams of Mustard greens, raw
+[Fruits]
+ - 16.00 grams of Lemon, raw
+[Fruit & Vegetables]
+ - 2 serving(s) of Peppers, banana, raw
+ - 2 serving(s) of Pear, Asian, raw
+[Others]
+ - 42.57 grams of Clams, canned
+ - 9.04 grams of Wheat bran
+ - 339.00 grams of Cheese, cottage, lowfat, low sodium
+ - 14.08 grams of Soybean curd
+ - 65.28 grams of Chicken as ingredient in recipes
+[Proteins]
+ - 24.56 grams of Beef, for use with vegetables
+ - 246.69 grams of Fish, salmon, steamed
+ - 15.39 grams of Beef, steak, round
+
+
+[Meals]
+ - 174.00 grams of Lettuce, salad with assorted vegetables including tomatoes and/or carrots, no dressing
+ - 148.00 grams of Lettuce, salad with assorted vegetables excluding tomatoes and carrots, no dressing
+[Vegetables]
+ - 8.00 grams of Asparagus, raw
+[Fruits]
+ - 16.00 grams of Lemon, raw
+[Fruit & Vegetables]
+ - 2 serving(s) of Peppers, banana, raw
+ - 2 serving(s) of Pear, Asian, raw
+[Snacks]
+ - 7.60 grams of Cookie, marshmallow and peanut butter, with oat cereal, no bake
+ - 1 serving(s) of Cookie, ladyfinger
+ - 1 serving(s) of Cookie, brownie, reduced fat, NS as to icing
+ - 1 serving(s) of Cookie, meringue
+ - 3 serving(s) of Soft serve, blended with candy or cookies, from fast food
+ - 1 serving(s) of Ice cream cookie sandwich
+ - 14.76 grams of Cookie, butterscotch, brownie
+[Others]
+ - 1.50 grams of Oysters, steamed
+ - 8.17 grams of Caviar
+ - 6.61 grams of Fruit juice, acai blend
+ - 0.54 grams of Almond milk, unsweetened
+[Proteins]
+ - 10.68 grams of Fish, trout, steamed
+
+
+
+
+[Meals]
+ - 480.00 grams of Gelatin dessert, sugar free, with fruit
+ - 270.00 grams of Chicken breast, stewed, skin not eaten
+[Vegetables]
+ - 51.00 grams of Alfalfa sprouts, raw
+ - 444.77 grams of Summer squash, yellow, raw
+ - 69.00 grams of Green beans, cooked, as ingredient
+ - 30.00 grams of Cucumber, raw
+ - 127.57 grams of Bean sprouts, raw
+ - 230.00 grams of Summer squash, green, raw
+ - 3 serving(s) of Green beans, canned, reduced sodium, cooked with oil
+ - 165.00 grams of Green beans, raw
+[Fruits]
+ - 3 serving(s) of Peach, canned, NFS
+ - 2 serving(s) of Peach, frozen
+ - 3 serving(s) of Pear, Asian, raw
+[Fruit & Vegetables]
+ - 3 serving(s) of Peppers, banana, raw
+[Snacks]
+ - 115.48 grams of Yogurt, Greek, nonfat milk, plain
+[Others]
+ - 33.53 grams of Soybean curd
+ - 321.24 grams of Lomi salmon
+ - 3 serving(s) of Clams, canned
+ - 3.89 grams of Caviar
+ - 339.00 grams of Cheese, cottage, lowfat, low sodium
+[Proteins]
+ - 405.00 grams of Fish, bass, steamed
