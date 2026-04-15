@@ -4,7 +4,7 @@ From Chat GPT:
 
 1️⃣ Each of You Clones the Repo Locally
 On your own machines:
-git clone https://github.com/yourname/project name.git
+git clone https://github.com/yourname/projectname.git
 cd projectname
 Never work directly on GitHub.com. Always work locally.
 🧠 How You Should Actually Work Together

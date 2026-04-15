@@ -4,7 +4,7 @@ import optimizer_modes as opmd
 from pulp import HiGHS, LpProblem, LpMaximize, LpVariable, lpSum, LpStatus, LpInteger, LpContinuous, LpBinary
 import re
 
-mode = "normal"  # normal, rfk_jr, cookie_monster, bodybuilder, mediterranean, etc.
+mode = "Baseline"  # normal, rfk_jr, cookie_monster, bodybuilder, mediterranean, etc.
 print(f"\nOptimization mode: {mode}")
 
 nutrient_ranges = cons.get_nutrient_ranges(
@@ -19,7 +19,7 @@ nutrient_ranges = cons.get_nutrient_ranges(
 )
 
 foods = pd.read_csv('FoodData_Categorized_v8.csv')
-foods = foods.sample(frac=1).reset_index(drop=True) # shuffle the foods to encourage variety in the optimization results
+foods = foods.sample(frac=1).reset_index(drop=True) # shuffle the foods to encourage variety in the optimization results, we will also add some random jitter to the nutrient constraints to further encourage variety in meal plans
 foods = foods.fillna(0)  # Fill missing nutrient values with 0
 
 foods['Omega-3 Total (g)'] = (
@@ -76,7 +76,7 @@ valid_nutrients = [k for k in nutrient_ranges if k in name_map]
 
 # Remove beverages (coffee, tea, soda, diet drinks, energy drinks, water) - these tend to have very low satiety scores and can skew the optimization
 # Other removals: Nutritional supplements, # enriched foods
-beverage_pattern = r'\b(?:coffee|tea|soda|diet|water|energy drink|soft drink|sugar substitute|nutritional|supplement|Baby|Toddler|Textured vegetable protein)\b' #"enriched"
+beverage_pattern = r'\b(?:coffee|tea|soda|diet|water|energy drink|soft drink|sugar substitute|nutritional|supplement|Baby|Toddler|vegetable protein|gelatin)\b' #"enriched"
 foods = foods[~foods['Name'].str.contains(beverage_pattern, case=False, na=False)] 
 foods = foods.reset_index(drop=True)
 
@@ -435,10 +435,6 @@ else:
 print("\n--- Nutritional Profile of Meal Plan ---")
 
 nutrient_totals = {}
-total_satiety_score = sum(
-    (food_vars[i].varValue or 0) * foods.at[i, 'satiety_score']
-    for i in food_indices
-)
 
 for nutrient in valid_nutrients:
     col = name_map[nutrient]
@@ -450,8 +446,6 @@ for nutrient in valid_nutrients:
 
     nutrient_totals[nutrient] = total
 
-print(f"{'Total Satiety Score':20} : {total_satiety_score:.2f}")
-
 for nutrient in nutrient_totals:
     lower_bound, upper_bound = nutrient_ranges[nutrient]
 
@@ -462,3 +456,5 @@ for nutrient in nutrient_totals:
 
     else:
         print(f"{nutrient:20} : {value:.2f} ({lower_bound} - {upper_bound})")
+
+
