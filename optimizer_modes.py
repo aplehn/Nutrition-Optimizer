@@ -5,6 +5,10 @@ MODE_WEIGHTS = {
         "satiety_score": 1.0,
     },
 
+    "Baseline": {
+        
+    },
+
     "rfk_jr": {
         "satiety_score": 1.0,
         "is_beef": 2.0,
