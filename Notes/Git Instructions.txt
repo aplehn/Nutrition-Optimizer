@@ -72,3 +72,12 @@ git push
 In case of a conflict, to overwrite your existing changes with what is currently in main, use the following commands
 git fetch origin
 git reset --hard origin/main
+
+
+For Plehn-personal-dev
+
+git checkout -b personal-dev
+
+git add .
+git commit -m "new feature"
+git push
