@@ -17,6 +17,29 @@ ACTIVITY_FACTORS = {
 # Format: nutrient_name -> (min, max)
 # Use None where no upper bound is desired
 # -----------------------------
+# ALEC_PLEHN_BASE = {
+#     'B6_Pyridoxine': (1.3*3, 100),       # mg
+#     'B12_Cobalamin': (2.4*3, None),      # mcg
+#     'Folate': (400, 1000),             # mcg
+#     'Vitamin_A': (900, 3000),          # mcg
+#     'Vitamin_C': (90, 2000),           # mg
+#     'Vitamin_D': (15*10, None),        # mcg
+#     'Vitamin_E': (15, 1000),           # mg
+#     'Vitamin_K': (120, None),          # mcg
+#     'Iron': (8*10, None),                   # mg
+#     'Carbs': (130, None),              # g
+#     'Fiber': (25, 70),                 # placeholder; overwritten from calories
+#     'Fat': (44, 77),                   # placeholder; overwritten from calories
+#     'Saturated_Fat': (0, 20),          # placeholder; overwritten from calories
+#     'Omega_3': (1.6, None),            # g
+#     'Calcium': (1000*1.2, 2500),           # mg
+#     'Magnesium': (420*1.2, None),          # mg
+#     'Potassium': (3400, None),         # mg
+#     'Sodium': (0, 2300),               # mg
+#     'Zinc': (11, 40),                  # mg
+#     'Protein': (50, None),             # placeholder; overwritten from weight
+# }
+
 ADULT_MALE_BASE = {
     'B6_Pyridoxine': (1.3, 100),       # mg
     'B12_Cobalamin': (2.4, None),      # mcg
@@ -247,6 +270,29 @@ def apply_life_stage_overrides(ranges, sex, age_years, life_stage):
     life_stage = life_stage.lower()
 
     if life_stage == "adult":
+        return ranges
+    
+    if life_stage == "alec plehn":
+        ranges['B6_Pyridoxine'] = (1.3*3, 100)       # mg
+        ranges['B12_Cobalamin'] = (2.4*3, None)      # mcg
+        ranges['Folate'] = (400, 1000)             # mcg
+        ranges['Vitamin_A'] = (900, 3000)          # mcg
+        ranges['Vitamin_C'] = (90, 2000)           # mg
+        ranges['Vitamin_D'] = (15*10, None)        # mcg
+        ranges['Vitamin_E'] = (15, 1000)           # mg
+        ranges['Vitamin_K'] = (120, None)          # mcg
+        ranges['Iron'] = (8*10, None)              # mg
+        ranges['Carbs'] = (130, None)              # g
+        ranges['Fiber'] = (25, 70)                 # placeholder; overwritten from calories
+        ranges['Fat'] = (44, 77)                   # placeholder; overwritten from calories
+        ranges['Saturated_Fat'] = (0, 20)          # placeholder; overwritten from calories
+        ranges['Omega_3'] = (1.6, None)            # g
+        ranges['Calcium'] = (1000*1.2, 2500)       # mg
+        ranges['Magnesium'] = (420*1.2, None)      # mg
+        ranges['Potassium'] = (3400, None)         # mg
+        ranges['Sodium'] = (0, 2300)               # mg
+        ranges['Zinc'] = (11, 40)                  # mg
+        ranges['Protein'] = (50, None)             # placeholder; overwritten from weight
         return ranges
 
     if sex != "female":

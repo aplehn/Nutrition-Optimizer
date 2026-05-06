@@ -3,14 +3,6 @@ import individualized_constraints as cons
 import optimizer_modes as opmd
 from pulp import HiGHS, LpProblem, LpMaximize, LpVariable, lpSum, LpStatus, LpInteger, LpContinuous, LpBinary
 import re
-import json
-
-with open("food_preferences.json", "r") as f:
-    prefs = json.load(f)
-
-excluded_food_queries = prefs.get("excluded_foods", [])
-forced_food_entries = prefs.get("forced_foods", [])
-
 
 mode = "Baseline"  # normal, rfk_jr, cookie_monster, bodybuilder, mediterranean, etc.
 print(f"\nOptimization mode: {mode}")
@@ -123,41 +115,98 @@ def exclusion_filter(name, query):
     pattern = rf"^(?!.*excluding.*{safe_query}).*{safe_query}"
     return bool(re.search(pattern, name, re.IGNORECASE))
 
-# --- APPLY EXCLUSIONS FROM FILE ---
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.prompt import Prompt, IntPrompt
 
+console = Console()
+
+# --- PHASE 1: GLOBAL EXCLUSIONS (BLACKLIST) ---
+console.print(Panel("[bold red]PHASE 1: BLACKLIST (Remove Unwanted Foods)[/bold red]", expand=False))
 excluded_indices = []
 
-for query in excluded_food_queries:
-    matches = foods[foods['Name'].str.contains(query, case=False, na=False)]
-    excluded_indices.extend(matches.index.tolist())
+while True:
+    exclude_query = Prompt.ask("\nSearch to [bold red]EXCLUDE[/bold red] (or [bold yellow]Enter[/bold yellow] to finish)")
+    if not exclude_query: break
 
+    # Direct ID Exclusion
+    if exclude_query.isdigit():
+        idx = int(exclude_query)
+        if idx in foods.index:
+            excluded_indices.append(idx)
+            console.print(f"[bold red]Restricted:[/bold red] {foods.at[idx, 'Name']}")
+        continue
+
+    # Keyword Search for Exclusion
+    matches = foods[foods['Name'].apply(lambda x: exclusion_filter(x, exclude_query))]
+    if not matches.empty:
+        matches = matches.sort_values(by='satiety_score', ascending=False)
+        
+        table = Table(title=f"Potential Exclusions for '{exclude_query}'", header_style="bold magenta")
+        table.add_column("ID", justify="right", style="dim")
+        table.add_column("Food Name")
+        
+        for idx, row in matches.head(None).iterrows():
+            table.add_row(str(idx), row['Name'])
+        console.print(table)
+        
+        action = Prompt.ask("Action", choices=["all", "id", "c"], default="all")
+        if action == "all":
+            excluded_indices.extend(matches.index.tolist())
+            console.print(f"[bold red]Restricted all {len(matches)} items.[/bold red]")
+        elif action == "id":
+            target_id = IntPrompt.ask("Enter specific ID to exclude")
+            if target_id in matches.index:
+                excluded_indices.append(target_id)
+                console.print(f"[bold red]Restricted:[/bold red] {foods.at[target_id, 'Name']}")
+    else:
+        console.print(f"[yellow]No results found for '{exclude_query}'.[/yellow]")
+
+# Apply removals
 if excluded_indices:
     foods = foods.drop(index=list(set(excluded_indices))).reset_index(drop=True)
     food_indices = foods.index.tolist()
+    console.print(f"\n[bold green]Removing Complete.[/bold green] {len(foods)} food items remaining.")
 
-print(f"\nExcluded {len(set(excluded_indices))} foods from preferences file.")
 
-
-# --- APPLY FORCED FOODS FROM FILE ---
-
+# --- PHASE 2: MULTI-FOOD SEARCH AND SELECTION (INCLUDE) ---
+console.print(Panel("[bold green]PHASE 2: SELECTION (Force Foods Into Plan)[/bold green]", expand=False))
 selected_foods = []
-forced_minimums = {}
 
-for entry in forced_food_entries:
-    name_query = entry["name"]
-    min_servings = entry.get("min_servings", 1)
+while True:
+    search_query = Prompt.ask("\nSearch to [bold green]INCLUDE[/bold green] (or [bold yellow]Enter[/bold yellow] to finish)")
+    if not search_query: break
 
-    matches = foods[foods['Name'].str.contains(name_query, case=False, na=False)]
+    matches = foods[foods['Name'].apply(lambda x: exclusion_filter(x, search_query))]
 
     if not matches.empty:
-        idx = matches.index[0]  # take first match
-        selected_foods.append(idx)
-        forced_minimums[idx] = min_servings
-        print(f"Forced include: {foods.at[idx, 'Name']} (min {min_servings})")
+        matches = matches.sort_values(by='satiety_score', ascending=False)
+        
+        table = Table(title=f"Matches for '{search_query}'", header_style="bold cyan")
+        table.add_column("ID", justify="right", style="dim")
+        table.add_column("Food Name")
+        table.add_column("Satiety")
+        
+        for idx, row in matches.head(None).iterrows():
+            table.add_row(str(idx), row['Name'], f"{row['satiety_score']:.2f}")
+        console.print(table)
+        
+        choice = Prompt.ask("Enter ID to add (or [bold yellow]c[/bold yellow] to cancel)")
+        if choice.lower() == 'c': continue
+        
+        if choice.isdigit():
+            food_idx = int(choice)
+            if food_idx in foods.index:
+                selected_foods.append(food_idx)
+                console.print(f"[bold green]Added to Anchor List:[/bold green] {foods.at[food_idx, 'Name']}")
+            else:
+                console.print("[red]Invalid ID.[/red]")
     else:
-        print(f"WARNING: No match found for forced food '{name_query}'")
+        console.print(f"[yellow]No results for '{search_query}'.[/yellow]")
+# After the user has finished entering foods, we print the final list of selected foods that will be forced into the meal plan optimization.
+print(f"\nFinal list of forced foods: {[foods.at[i, 'Name'] for i in selected_foods]}")
 
-print(f"\nFinal forced foods: {[foods.at[i, 'Name'] for i in selected_foods]}")
 
 # Create variables dynamically based on Optimization type column
 food_vars = {}
@@ -199,10 +248,10 @@ for row in foods[['OptimizationType', 'FoodCategory']].itertuples(index=True):
 # If the user has selected specific foods to include in their meal plan, we add constraints to the optimization problem to ensure those foods are included.
 if selected_foods:
     for selected_food in selected_foods:
-        minimum_amount = forced_minimums.get(selected_food, 1)
-
-        prob += bin_vars[(selected_food)] == 1, f"Include_{selected_food}"
-        prob += food_vars[(selected_food)] >= minimum_amount, f"Minimum_{selected_food}"
+        # Add constraint to ensure the user-selected food is included in the meal plan
+        name = foods.at[selected_food, 'Name']
+        portion = foods.at[selected_food, 'Portion size (g)']
+        minimum_amount = Prompt.ask(f"\nEnter minimum amount for {name} ({portion}g) (in servings, default 1)")
         if not minimum_amount:
             minimum_amount = 1
         else:
@@ -407,3 +456,5 @@ for nutrient in nutrient_totals:
 
     else:
         print(f"{nutrient:20} : {value:.2f} ({lower_bound} - {upper_bound})")
+
+

@@ -1,0 +1,15 @@
+{
+  "excluded_foods": [
+    "Eggnog, alcoholic"
+  ],
+  "forced_foods": [
+    {
+      "name": "Avocado, raw",
+      "min_servings": 1
+    },
+    {
+      "name": "Bread, whole wheat, toasted",
+      "min_servings": 2
+    }
+  ]
+}
